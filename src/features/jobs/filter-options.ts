@@ -1,0 +1,91 @@
+/**
+ * Single source of truth for the jobs filter system.
+ * Adding a new option here automatically flows through URL parsing,
+ * the filter panel, chips, and (with a service `where` mapping) the query.
+ */
+
+export const EXPERIENCE_LEVELS = [
+  { id: "fresher", label: "Fresher" },
+  { id: "0-1", label: "0–1 years" },
+  { id: "1-3", label: "1–3 years" },
+  { id: "3-5", label: "3–5 years" },
+  { id: "5+", label: "5+ years" },
+] as const;
+
+export type ExperienceLevelId = (typeof EXPERIENCE_LEVELS)[number]["id"];
+
+export const WORK_MODES = [
+  { id: "remote", label: "Remote" },
+  { id: "hybrid", label: "Hybrid" },
+  { id: "onsite", label: "On-site" },
+] as const;
+
+export type WorkModeId = (typeof WORK_MODES)[number]["id"];
+
+export const EMPLOYMENT_TYPES = [
+  { id: "full_time", label: "Full-time" },
+  { id: "part_time", label: "Part-time" },
+  { id: "internship", label: "Internship" },
+  { id: "contract", label: "Contract" },
+  { id: "freelance", label: "Freelance" },
+] as const;
+
+export type EmploymentTypeId = (typeof EMPLOYMENT_TYPES)[number]["id"];
+
+export const DATE_POSTED_OPTIONS = [
+  { id: "1d", label: "Last 24 hours", days: 1 },
+  { id: "3d", label: "Last 3 days", days: 3 },
+  { id: "7d", label: "Last 7 days", days: 7 },
+  { id: "15d", label: "Last 15 days", days: 15 },
+  { id: "30d", label: "Last 30 days", days: 30 },
+] as const;
+
+export type DatePostedId = (typeof DATE_POSTED_OPTIONS)[number]["id"];
+
+export const RADIUS_OPTIONS_KM = [10, 25, 50, 100] as const;
+
+export type RadiusKm = (typeof RADIUS_OPTIONS_KM)[number];
+
+export const SORT_OPTIONS = [
+  { id: "newest", label: "Newest first" },
+  { id: "oldest", label: "Oldest first" },
+  { id: "best_match", label: "Best match (resume)" },
+  { id: "company_az", label: "Company (A–Z)" },
+] as const;
+
+export type SortId = (typeof SORT_OPTIONS)[number]["id"];
+
+function ids<T extends readonly { id: string }[]>(options: T): string[] {
+  return options.map((option) => option.id);
+}
+
+export function isExperienceLevel(value: string): value is ExperienceLevelId {
+  return ids(EXPERIENCE_LEVELS).includes(value);
+}
+
+export function isWorkMode(value: string): value is WorkModeId {
+  return ids(WORK_MODES).includes(value);
+}
+
+export function isEmploymentType(value: string): value is EmploymentTypeId {
+  return ids(EMPLOYMENT_TYPES).includes(value);
+}
+
+export function isDatePosted(value: string): value is DatePostedId {
+  return ids(DATE_POSTED_OPTIONS).includes(value);
+}
+
+export function isSortId(value: string): value is SortId {
+  return ids(SORT_OPTIONS).includes(value);
+}
+
+export function isRadiusKm(value: number): value is RadiusKm {
+  return (RADIUS_OPTIONS_KM as readonly number[]).includes(value);
+}
+
+export function labelFor(
+  options: readonly { id: string; label: string }[],
+  id: string
+): string {
+  return options.find((option) => option.id === id)?.label ?? id;
+}

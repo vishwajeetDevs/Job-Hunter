@@ -1,0 +1,174 @@
+// Job Hunter OS — Prisma Schema
+//
+// Connection strategy (Neon PostgreSQL):
+// - Runtime queries use the POOLED connection string (DATABASE_URL) via the
+//   pg driver adapter configured in `src/lib/prisma.ts`.
+// - Migrations use the DIRECT connection string (DIRECT_URL) configured in
+//   `prisma.config.ts`, since Neon's PgBouncer pooler does not support the
+//   session-level features the migration engine requires.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum ApplicationStatus {
+  SAVED
+  APPLIED
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+enum ResumeType {
+  // Uploaded by the user; never modified by AI.
+  MASTER
+  // AI-generated, job-specific version derived from a master resume.
+  OPTIMIZED
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id          String  @id @default(cuid())
+  clerkUserId String  @unique
+  email       String  @unique
+  name        String?
+  imageUrl    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations: one User → many Resumes / Applications
+  resumes      Resume[]
+  applications Application[]
+
+  // Note: `clerkUserId` and `email` are covered by the unique constraints
+  // above, which create indexes automatically.
+  @@map("users")
+}
+
+model Resume {
+  id               String     @id @default(cuid())
+  userId           String
+  type             ResumeType @default(MASTER)
+  originalFileName String
+  // Storage key of the uploaded file. Null for OPTIMIZED resumes,
+  // which are generated content rather than uploads.
+  originalFileUrl  String?
+  parsedData       Json?
+  // Plain text extracted from the uploaded file at upload time.
+  // Reused for AI analysis/generation and the comparison view.
+  rawText          String?
+
+  // --- OPTIMIZED-only fields -------------------------------------
+  // The master resume this version was derived from.
+  parentResumeId String?
+  // The job this version was optimized for.
+  jobId          String?
+  // Structured AI-generated resume content (OptimizedResumeContent).
+  content        Json?
+  // Match analysis snapshot captured when this version was generated.
+  analysis       Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentResume Resume?       @relation("ResumeVersions", fields: [parentResumeId], references: [id], onDelete: Cascade)
+  versions     Resume[]      @relation("ResumeVersions")
+  job          Job?          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  // At most one optimized resume per user per job. MASTER rows have a
+  // null jobId, so Postgres never counts them against this constraint.
+  @@unique([userId, jobId])
+  @@index([userId])
+  @@index([parentResumeId])
+  @@index([jobId])
+  @@map("resumes")
+}
+
+model Job {
+  id          String    @id @default(cuid())
+  externalId  String?
+  title       String
+  company     String
+  location    String?
+  description String?
+  source      String?
+  jobUrl      String?
+  postedAt    DateTime?
+
+  // Enriched at ingestion (see src/services/jobs/enrichment/).
+  // workMode: remote | hybrid | onsite (null = not yet enriched)
+  workMode        String?
+  // employmentType: full_time | part_time | internship | contract | freelance
+  employmentType  String?
+  // experienceLevel: fresher | 0-1 | 1-3 | 3-5 | 5+ (null = unknown)
+  experienceLevel String?
+  // Annual salary range where the source exposes it.
+  salaryMin       Int?
+  salaryMax       Int?
+  salaryCurrency  String?
+  // Resolved from the location text via the known-cities dataset;
+  // powers radius-based search.
+  latitude        Float?
+  longitude       Float?
+
+  createdAt DateTime @default(now())
+
+  // Relations: one Job → many Applications / optimized Resumes
+  applications Application[]
+  resumes      Resume[]
+
+  // Prevent duplicate imports of the same job from the same source.
+  @@unique([source, externalId])
+  @@index([title])
+  @@index([company])
+  @@index([location])
+  @@index([source])
+  @@index([postedAt])
+  @@index([workMode])
+  @@index([employmentType])
+  @@index([experienceLevel])
+  @@index([latitude, longitude])
+  @@map("jobs")
+}
+
+model Application {
+  id        String            @id @default(cuid())
+  userId    String
+  jobId     String
+  // The resume used for this application. Points at the job's
+  // optimized resume when one exists, otherwise the master resume.
+  resumeId  String?
+  status    ApplicationStatus @default(SAVED)
+  notes     String?
+  appliedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job    Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+
+  // A user can only have one application per job.
+  @@unique([userId, jobId])
+  @@index([userId])
+  @@index([jobId])
+  @@index([resumeId])
+  @@index([status])
+  @@map("applications")
+}
