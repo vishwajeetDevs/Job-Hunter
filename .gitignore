@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Local resume file storage (not committed)
 /storage/
+
+# clerk configuration (can include secrets)
+/.clerk/

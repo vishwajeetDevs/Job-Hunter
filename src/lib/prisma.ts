@@ -17,8 +17,16 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
+  const connectionString = normalizePgConnectionString(process.env.DATABASE_URL);
+
+  if (!connectionString) {
+    throw new Error(
+      "DATABASE_URL is not set. Add your Neon connection string to .env and restart the dev server."
+    );
+  }
+
   const pool = new pg.Pool({
-    connectionString: normalizePgConnectionString(process.env.DATABASE_URL),
+    connectionString,
     // Keep the app-side pool small — Neon's PgBouncer handles fan-out.
     max: 10,
   });

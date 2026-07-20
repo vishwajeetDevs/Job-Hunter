@@ -56,8 +56,7 @@ const YEARS_RANGE_REGEX = /(\d+)\s*(?:-|–|to)\s*(\d+)\+?\s*(?:\+\s*)?years?/i;
 const YEARS_MIN_REGEX = /(\d+)\s*\+?\s*years?/i;
 
 function bucketFromMinYears(minYears: number): ExperienceLevelId {
-  if (minYears <= 0) return "fresher";
-  if (minYears <= 1) return "0-1";
+  if (minYears <= 1) return "fresher";
   if (minYears <= 3) return "1-3";
   if (minYears <= 5) return "3-5";
   return "5+";
@@ -79,7 +78,7 @@ export function classifyExperienceLevel(input: {
     return "5+";
   }
   if (/\bjunior|jr\.?\b/.test(title)) {
-    return "0-1";
+    return "fresher";
   }
 
   const description = (input.description ?? "").slice(0, 2500);

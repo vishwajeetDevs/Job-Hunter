@@ -34,7 +34,7 @@ type JobsFilterPanelProps = {
  */
 export function JobsFilterPanel({ filters }: JobsFilterPanelProps) {
   const router = useRouter();
-  const { start } = useLoadingBar();
+  const { startNavigation } = useLoadingBar();
   const [isOpen, setIsOpen] = useState(false);
   const [draft, setDraft] = useState<Partial<JobFilters>>(filters);
 
@@ -43,14 +43,14 @@ export function JobsFilterPanel({ filters }: JobsFilterPanelProps) {
   };
 
   const apply = () => {
-    start();
+    startNavigation();
     router.push(jobsUrl({ ...draft, sort: filters.sort, page: 1 }));
     setIsOpen(false);
   };
 
   const clearAll = () => {
     setDraft({});
-    start();
+    startNavigation();
     router.push(jobsUrl({ sort: filters.sort }));
     setIsOpen(false);
   };

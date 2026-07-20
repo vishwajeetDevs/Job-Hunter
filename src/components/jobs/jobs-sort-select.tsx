@@ -14,7 +14,7 @@ type JobsSortSelectProps = {
 
 export function JobsSortSelect({ filters }: JobsSortSelectProps) {
   const router = useRouter();
-  const { start } = useLoadingBar();
+  const { startNavigation } = useLoadingBar();
 
   return (
     <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -24,7 +24,7 @@ export function JobsSortSelect({ filters }: JobsSortSelectProps) {
         className={nativeSelectClassName}
         value={filters.sort}
         onChange={(event) => {
-          start();
+          startNavigation();
           router.push(
             jobsUrl({ ...filters, sort: event.target.value as SortId, page: 1 })
           );

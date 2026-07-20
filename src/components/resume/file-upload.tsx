@@ -70,8 +70,12 @@ export function FileUpload({ onUploadSuccess, className }: FileUploadProps) {
         }
       };
 
-      xhr.onload = () => {
+      // Fires after load, error, or abort — the bar always stops.
+      xhr.onloadend = () => {
         stop();
+      };
+
+      xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const response = JSON.parse(xhr.responseText) as UploadResumeResponse;
@@ -96,7 +100,6 @@ export function FileUpload({ onUploadSuccess, className }: FileUploadProps) {
       };
 
       xhr.onerror = () => {
-        stop();
         setUploadState("error");
         setError("Network error. Please try again.");
       };

@@ -5,14 +5,33 @@
  */
 
 export const EXPERIENCE_LEVELS = [
-  { id: "fresher", label: "Fresher" },
-  { id: "0-1", label: "0–1 years" },
+  { id: "fresher", label: "Fresher (0–1 years)" },
   { id: "1-3", label: "1–3 years" },
   { id: "3-5", label: "3–5 years" },
   { id: "5+", label: "5+ years" },
 ] as const;
 
 export type ExperienceLevelId = (typeof EXPERIENCE_LEVELS)[number]["id"];
+
+/**
+ * "0-1" was merged into "fresher", but jobs enriched before the merge
+ * (and old URLs) may still carry it.
+ */
+export const LEGACY_EXPERIENCE_ALIASES: Record<string, ExperienceLevelId> = {
+  "0-1": "fresher",
+};
+
+export function normalizeExperienceLevel(
+  value: string
+): ExperienceLevelId | undefined {
+  if (isExperienceLevel(value)) return value;
+  return LEGACY_EXPERIENCE_ALIASES[value];
+}
+
+/** Label for a stored experience level, resolving legacy aliases. */
+export function experienceLevelLabel(value: string): string {
+  return labelFor(EXPERIENCE_LEVELS, normalizeExperienceLevel(value) ?? value);
+}
 
 export const WORK_MODES = [
   { id: "remote", label: "Remote" },

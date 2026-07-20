@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   EMPLOYMENT_TYPES,
-  EXPERIENCE_LEVELS,
   WORK_MODES,
+  experienceLevelLabel,
   labelFor,
 } from "@/features/jobs/filter-options";
 import type { JobListItem } from "@/features/jobs/types";
@@ -99,7 +99,7 @@ export function JobCard({ job }: JobCardProps) {
               )}
               {job.experienceLevel && (
                 <Badge variant="outline" className="text-xs font-normal">
-                  {labelFor(EXPERIENCE_LEVELS, job.experienceLevel)}
+                  {experienceLevelLabel(job.experienceLevel)}
                 </Badge>
               )}
               {job.salaryLabel && (

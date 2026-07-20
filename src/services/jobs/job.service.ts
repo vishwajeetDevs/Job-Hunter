@@ -139,7 +139,16 @@ function buildWhere(
     });
   }
 
-  if (filters.experienceLevel) conditions.push({ experienceLevel: filters.experienceLevel });
+  if (filters.experienceLevel) {
+    conditions.push({
+      // "0-1" merged into "fresher"; rows enriched before the merge may
+      // still store the old value.
+      experienceLevel:
+        filters.experienceLevel === "fresher"
+          ? { in: ["fresher", "0-1"] }
+          : filters.experienceLevel,
+    });
+  }
   if (filters.workMode) conditions.push({ workMode: filters.workMode });
   if (filters.employmentType) conditions.push({ employmentType: filters.employmentType });
   if (filters.source) conditions.push({ source: filters.source });

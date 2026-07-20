@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/card";
 import {
   EMPLOYMENT_TYPES,
-  EXPERIENCE_LEVELS,
   WORK_MODES,
+  experienceLevelLabel,
   labelFor,
 } from "@/features/jobs/filter-options";
 import {
@@ -51,9 +51,10 @@ function formatPostedAt(date: Date): string {
 export default async function JobDetailPage({ params }: JobDetailPageProps) {
   const { jobId } = await params;
   const { userId: clerkUserId } = await requireAuth();
-  const user = await ensureDbUser(clerkUserId);
-
-  const job = await getJobForStudio(jobId);
+  const [user, job] = await Promise.all([
+    ensureDbUser(clerkUserId),
+    getJobForStudio(jobId),
+  ]);
 
   if (!job) {
     notFound();
@@ -118,7 +119,7 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
               )}
               {job.experienceLevel && (
                 <Badge variant="outline">
-                  {labelFor(EXPERIENCE_LEVELS, job.experienceLevel)}
+                  {experienceLevelLabel(job.experienceLevel)}
                 </Badge>
               )}
               {application && (

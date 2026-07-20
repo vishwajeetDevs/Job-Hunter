@@ -18,7 +18,7 @@ type JobsFilterPersistenceProps = {
  */
 export function JobsFilterPersistence({ currentQuery }: JobsFilterPersistenceProps) {
   const router = useRouter();
-  const { start } = useLoadingBar();
+  const { startNavigation } = useLoadingBar();
   const restoreAttempted = useRef(false);
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function JobsFilterPersistence({ currentQuery }: JobsFilterPersistencePro
       if (!currentQuery) {
         const saved = window.localStorage.getItem(STORAGE_KEY);
         if (saved) {
-          start();
+          startNavigation();
           router.replace(`/dashboard/jobs?${saved}`);
           return;
         }
@@ -36,7 +36,7 @@ export function JobsFilterPersistence({ currentQuery }: JobsFilterPersistencePro
     }
 
     window.localStorage.setItem(STORAGE_KEY, currentQuery);
-  }, [currentQuery, router, start]);
+  }, [currentQuery, router, startNavigation]);
 
   return null;
 }

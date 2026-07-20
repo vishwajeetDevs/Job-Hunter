@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 import { useLoadingBar } from "@/components/loading/loading-bar-provider";
@@ -22,16 +22,14 @@ function shouldTrackNavigation(href: string, anchor: HTMLAnchorElement): boolean
 export function LoadingBarNavigation() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { start, stop } = useLoadingBar();
-  const navigationActive = useRef(false);
+  const { startNavigation, endNavigation } = useLoadingBar();
   const routeKey = `${pathname}?${searchParams.toString()}`;
 
+  // Any route change means the pending navigation (from whatever source:
+  // link click, filter apply, sort change, ...) has completed.
   useEffect(() => {
-    if (navigationActive.current) {
-      navigationActive.current = false;
-      stop();
-    }
-  }, [routeKey, stop]);
+    endNavigation();
+  }, [routeKey, endNavigation]);
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
@@ -44,8 +42,13 @@ export function LoadingBarNavigation() {
       const href = anchor.getAttribute("href");
       if (!href || !shouldTrackNavigation(href, anchor)) return;
 
-      navigationActive.current = true;
-      start();
+      // Clicking a link to the page we're already on won't change the
+      // route, so it would never be "ended" — don't start the bar.
+      const current = window.location.pathname + window.location.search;
+      const target = new URL(href, window.location.origin);
+      if (target.pathname + target.search === current) return;
+
+      startNavigation();
     };
 
     const onSubmit = (event: SubmitEvent) => {
@@ -56,8 +59,7 @@ export function LoadingBarNavigation() {
       const action = form.getAttribute("action") ?? window.location.pathname;
       if (!action.startsWith("/")) return;
 
-      navigationActive.current = true;
-      start();
+      startNavigation();
     };
 
     document.addEventListener("click", onClick, true);
@@ -67,7 +69,7 @@ export function LoadingBarNavigation() {
       document.removeEventListener("click", onClick, true);
       document.removeEventListener("submit", onSubmit, true);
     };
-  }, [start]);
+  }, [startNavigation]);
 
   return null;
 }
