@@ -12,7 +12,7 @@ export default async function DashboardPage() {
   const firstName = dbUser.name?.split(" ")[0] ?? null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="w-full space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
           Welcome back{firstName ? `, ${firstName}` : ""}

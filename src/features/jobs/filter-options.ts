@@ -5,10 +5,10 @@
  */
 
 export const EXPERIENCE_LEVELS = [
-  { id: "fresher", label: "Fresher (0–1 years)" },
-  { id: "1-3", label: "1–3 years" },
-  { id: "3-5", label: "3–5 years" },
-  { id: "5+", label: "5+ years" },
+  { id: "fresher", label: "Freshers" },
+  { id: "1-3", label: "Intermediate" },
+  { id: "3-5", label: "Mid-level" },
+  { id: "5+", label: "Senior" },
 ] as const;
 
 export type ExperienceLevelId = (typeof EXPERIENCE_LEVELS)[number]["id"];
@@ -55,8 +55,6 @@ export const DATE_POSTED_OPTIONS = [
   { id: "1d", label: "Last 24 hours", days: 1 },
   { id: "3d", label: "Last 3 days", days: 3 },
   { id: "7d", label: "Last 7 days", days: 7 },
-  { id: "15d", label: "Last 15 days", days: 15 },
-  { id: "30d", label: "Last 30 days", days: 30 },
 ] as const;
 
 export type DatePostedId = (typeof DATE_POSTED_OPTIONS)[number]["id"];

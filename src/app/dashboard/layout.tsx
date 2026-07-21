@@ -14,7 +14,7 @@ export default function DashboardLayout({
 
         <div className="lg:pl-64">
           <DashboardTopbar />
-          <main className="p-4 sm:p-6 lg:p-8">{children}</main>
+          <main className="w-full min-w-0 p-4 sm:p-5 lg:p-6">{children}</main>
         </div>
       </div>
     </AuthGuard>

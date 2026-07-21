@@ -41,7 +41,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
             <Briefcase className="size-7 text-primary" />
-            J
+            Jobs
           </h1>
           <p className="mt-1 text-muted-foreground">
             {total} job{total === 1 ? "" : "s"}

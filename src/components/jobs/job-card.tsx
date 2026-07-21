@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, Calendar, ExternalLink, MapPin, Target } from "lucide-react";
+import { Building2, Calendar, ExternalLink, MapPin } from "lucide-react";
 
 import { SaveJobButton } from "@/components/jobs/save-job-button";
 import { Badge } from "@/components/ui/badge";
@@ -35,17 +35,19 @@ type JobCardProps = {
 
 export function JobCard({ job }: JobCardProps) {
   return (
-    <Card className="border-border/60 transition-colors hover:border-primary/30">
-      <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between">
+    <Card className="group relative border-border/60 transition-colors hover:border-primary/30">
+      {/* Stretched link — whole card opens job details; action buttons sit above it. */}
+      <Link
+        href={`/dashboard/jobs/${job.id}`}
+        className="absolute inset-0 z-0 rounded-[inherit]"
+        aria-label={`Open ${job.title} at ${job.company}`}
+      />
+
+      <CardContent className="pointer-events-none relative z-10 flex flex-col gap-3 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold leading-snug">
-              <Link
-                href={`/dashboard/jobs/${job.id}`}
-                className="transition-colors hover:text-primary"
-              >
-                {job.title}
-              </Link>
+            <h3 className="font-semibold leading-snug transition-colors group-hover:text-primary">
+              {job.title}
             </h3>
             {job.source && (
               <Badge
@@ -114,13 +116,7 @@ export function JobCard({ job }: JobCardProps) {
           )}
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/dashboard/jobs/${job.id}`}>
-              <Target className="size-4" />
-              Analyze
-            </Link>
-          </Button>
+        <div className="pointer-events-auto relative z-20 flex shrink-0 items-center gap-2">
           {job.url && (
             <Button variant="outline" size="sm" asChild>
               <a href={job.url} target="_blank" rel="noopener noreferrer">

@@ -30,7 +30,7 @@ export default async function ParsedResumePage({ params }: ParsedResumePageProps
     createEmptyParsedResumeData(getResumeParserKind(), "1.0.0");
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="w-full space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <Link
@@ -38,7 +38,7 @@ export default async function ParsedResumePage({ params }: ParsedResumePageProps
             className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Back to RS
+            Back to Resume Studio
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
             <FileText className="size-7 text-primary" />
