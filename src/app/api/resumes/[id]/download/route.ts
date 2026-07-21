@@ -1,10 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
-import { createReadStream } from "node:fs";
-import { stat } from "node:fs/promises";
 import path from "node:path";
-import { Readable } from "node:stream";
 
-import { getResumeAbsolutePath } from "@/lib/storage/resume-storage";
+import { readResumeFile } from "@/lib/storage/resume-storage";
 import { getDbUserByClerkId } from "@/services/users/ensure-user";
 import { getResumeForUser } from "@/services/resumes/resume.service";
 
@@ -43,13 +40,9 @@ export async function GET(_request: Request, context: RouteContext) {
       return new Response("Not found", { status: 404 });
     }
 
-    const absolutePath = getResumeAbsolutePath(resume.originalFileUrl);
-    await stat(absolutePath);
+    const buffer = await readResumeFile(resume.originalFileUrl);
 
-    const nodeStream = createReadStream(absolutePath);
-    const webStream = Readable.toWeb(nodeStream) as ReadableStream;
-
-    return new Response(webStream, {
+    return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": contentTypeFromFileName(resume.originalFileName),
         "Content-Disposition": `attachment; filename="${resume.originalFileName}"`,

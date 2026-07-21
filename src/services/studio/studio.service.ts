@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getResumeAbsolutePath } from "@/lib/storage/resume-storage";
+import { readResumeFile } from "@/lib/storage/resume-storage";
 import type {
   OptimizedResumeContent,
   StudioAnalysisSnapshot,
@@ -57,8 +57,7 @@ export async function ensureResumeRawText(resume: {
   if (!resume.originalFileUrl) return "";
 
   try {
-    const { readFile } = await import("node:fs/promises");
-    const buffer = await readFile(getResumeAbsolutePath(resume.originalFileUrl));
+    const buffer = await readResumeFile(resume.originalFileUrl);
 
     const { extractTextFromResume } = await import(
       "@/services/resumes/parsers/text-extractor"

@@ -71,7 +71,7 @@ export class CareerjetAdapter implements JobSourceAdapter {
     }
 
     const referer =
-      process.env.CAREERJET_REFERER ?? "https://hirely.local/jobs/";
+      process.env.CAREERJET_REFERER ?? "https://hyrely.vercel.app/jobs/";
     // Prefer the real visitor's IP (passed per request); fall back to the
     // configured IP for local dev / server-triggered runs.
     const userIp =

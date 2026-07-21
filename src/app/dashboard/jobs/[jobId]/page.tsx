@@ -142,13 +142,14 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <Card className="border-border/60 lg:sticky lg:top-6 lg:self-start">
-          <CardHeader className="pb-3">
+        <Card className="border-border/60 lg:sticky lg:top-6 lg:max-h-[calc(100vh-5.5rem)] lg:self-start">
+          <CardHeader className="shrink-0 pb-3">
             <CardTitle className="text-base">Job description</CardTitle>
           </CardHeader>
-          <CardContent>
+          {/* min-h-0 lets this flex child shrink so overflow-y scrolls instead of clipping */}
+          <CardContent className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4">
             {job.description ? (
-              <div className="max-h-[calc(100vh-12rem)] overflow-y-auto whitespace-pre-line text-sm text-muted-foreground">
+              <div className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
                 {job.description}
               </div>
             ) : (
