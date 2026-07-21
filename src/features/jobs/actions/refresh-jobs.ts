@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 
 import type { RefreshJobsResult } from "@/features/jobs/types";
 import { prisma } from "@/lib/prisma";
+import { resolveUserIp } from "@/lib/request-ip";
 import { ingestJobsFromTargets } from "@/services/jobs/job-aggregation.service";
 import { enrichMissingJobs } from "@/services/jobs/job.service";
 import { TRACKED_COMPANIES } from "@/services/jobs/tracked-companies";
@@ -57,10 +58,10 @@ export async function refreshJobs(): Promise<RefreshJobsResult> {
     select: { id: true },
   });
 
-  // The visitor's public IP — Careerjet needs it as `user_ip`. On Vercel
-  // the real client IP is the first entry of x-forwarded-for.
+  // Resolve a real public IP for Careerjet's `user_ip`: the visitor's IP
+  // in production, or this machine's public IP in local dev.
   const forwardedFor = (await headers()).get("x-forwarded-for");
-  const userIp = forwardedFor?.split(",")[0]?.trim() || undefined;
+  const userIp = await resolveUserIp(forwardedFor);
 
   const targets = userIp
     ? TRACKED_COMPANIES.map((target) => ({ ...target, userIp }))
