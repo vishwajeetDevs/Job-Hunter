@@ -63,13 +63,12 @@ export async function refreshJobs(): Promise<RefreshJobsResult> {
   const forwardedFor = (await headers()).get("x-forwarded-for");
   const userIp = await resolveUserIp(forwardedFor);
 
-  // Careerjet only authorizes pre-declared IPs, so it can run only from
-  // your local machine (declared IP) — never from Vercel's dynamic IPs.
-  // Split by environment: locally fetch ONLY Careerjet; on Vercel fetch
-  // everything EXCEPT Careerjet.
+  // Careerjet requires a pre-whitelisted IP and cannot run on Vercel's
+  // dynamic addresses. Everywhere else (including localhost) runs all
+  // sources; on Vercel we skip Careerjet only.
   const isVercel = Boolean(process.env.VERCEL);
-  const selected = TRACKED_COMPANIES.filter((target) =>
-    isVercel ? target.source !== "careerjet" : target.source === "careerjet"
+  const selected = TRACKED_COMPANIES.filter(
+    (target) => !isVercel || target.source !== "careerjet"
   );
 
   const targets = userIp

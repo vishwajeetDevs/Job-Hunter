@@ -36,9 +36,14 @@ export const TRACKED_COMPANIES: JobIngestionTarget[] = [
   { source: "greenhouse", companyToken: "databricks", companyName: "Databricks" },
   { source: "greenhouse", companyToken: "coinbase", companyName: "Coinbase" },
 
-  // Lever boards
-  { source: "lever", companyToken: "plaid", companyName: "Plaid" },
+  // Lever boards (tokens are case-sensitive and verified against the
+  // live public API). Keep several active boards so Lever reliably
+  // contributes jobs even when one company has no open roles.
   { source: "lever", companyToken: "palantir", companyName: "Palantir" },
+  { source: "lever", companyToken: "plaid", companyName: "Plaid" },
+  { source: "lever", companyToken: "nium", companyName: "Nium" },
+  { source: "lever", companyToken: "GoToGroup", companyName: "GoTo Group" },
+  { source: "lever", companyToken: "pattern", companyName: "Pattern" },
 
   // Ashby boards (tokens verified against the live public API)
   { source: "ashby", companyToken: "openai", companyName: "OpenAI" },

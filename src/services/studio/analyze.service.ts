@@ -9,7 +9,10 @@ import {
   ANALYZE_SYSTEM_PROMPT,
   buildAnalyzeUserPrompt,
 } from "@/services/studio/prompts";
-import type { ParsedResumeData } from "@/services/resumes/parsers/types";
+import {
+  createEmptyParsedResumeData,
+  type ParsedResumeData,
+} from "@/services/resumes/parsers/types";
 
 /**
  * Analyzes the master resume against a job description and produces a
@@ -49,19 +52,7 @@ function keywordFallbackReport(input: {
   jobDescription: string;
 }): MatchReport {
   const base = computeKeywordMatchScore(
-    input.parsedData ?? {
-      name: null,
-      email: null,
-      skills: [],
-      education: [],
-      experience: [],
-      meta: {
-        parserId: "none",
-        parserVersion: "0",
-        parsedAt: new Date().toISOString(),
-        source: "heuristic",
-      },
-    },
+    input.parsedData ?? createEmptyParsedResumeData("none", "0"),
     input.jobDescription
   );
 

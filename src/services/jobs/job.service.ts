@@ -3,6 +3,7 @@ import type { JobFilters } from "@/features/jobs/filters";
 import { DATE_POSTED_OPTIONS } from "@/features/jobs/filter-options";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+import { isJobSourceId } from "@/services/jobs/aggregation/types";
 import { findCityByName } from "@/services/jobs/enrichment/cities";
 import { enrichExistingJob } from "@/services/jobs/enrichment/enrich-job";
 import { boundingBox, haversineKm } from "@/services/jobs/enrichment/geo";
@@ -123,13 +124,22 @@ function buildWhere(
   const conditions: Prisma.JobWhereInput[] = [];
 
   if (filters.query) {
-    conditions.push({
-      OR: [
-        { title: { contains: filters.query, mode: "insensitive" } },
-        { description: { contains: filters.query, mode: "insensitive" } },
-        { company: { contains: filters.query, mode: "insensitive" } },
-      ],
-    });
+    const query = filters.query.trim().toLowerCase();
+
+    if (isJobSourceId(query)) {
+      // Query is exactly a board name ("lever", "greenhouse", "ashby"...):
+      // show only that board's jobs instead of fuzzy text matching, which
+      // would drown them under unrelated hits like "leverage".
+      conditions.push({ source: query });
+    } else {
+      conditions.push({
+        OR: [
+          { title: { contains: filters.query, mode: "insensitive" } },
+          { description: { contains: filters.query, mode: "insensitive" } },
+          { company: { contains: filters.query, mode: "insensitive" } },
+        ],
+      });
+    }
   }
 
   if (radiusCity) {
@@ -348,4 +358,32 @@ export async function saveJobToTrackerForUser(
   });
 
   return { saved: true };
+}
+
+/**
+ * Removes a job from the user's tracker. Only applications still in the
+ * SAVED column can be unsaved — anything further along the pipeline
+ * (applied, interview, ...) must be managed from the board so progress
+ * isn't deleted by accident.
+ */
+export async function removeJobFromTrackerForUser(
+  userId: string,
+  jobId: string
+): Promise<{ removed: boolean; reason?: "not_found" | "in_progress" }> {
+  const existing = await prisma.application.findUnique({
+    where: { userId_jobId: { userId, jobId } },
+    select: { id: true, status: true },
+  });
+
+  if (!existing) {
+    return { removed: false, reason: "not_found" };
+  }
+
+  if (existing.status !== "SAVED") {
+    return { removed: false, reason: "in_progress" };
+  }
+
+  await prisma.application.delete({ where: { id: existing.id } });
+
+  return { removed: true };
 }

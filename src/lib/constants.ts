@@ -1,6 +1,6 @@
 import type { NavItem } from "@/types";
 
-export const SITE_NAME = "JH";
+export const SITE_NAME = "Hirely";
 
 export const SITE_DESCRIPTION =
   "Track applications, manage interviews, and land your next role — all in one place.";

@@ -26,17 +26,17 @@ function preservedParams(filters: JobFilters): Array<[string, string]> {
 }
 
 /**
- * Single horizontal toolbar: search → filters → sort → clear all.
- * All controls share the same height (h-8) and wrap gracefully on
- * smaller screens.
+ * Single horizontal toolbar: search on the left, filters/sort/clear on the
+ * right. One row on desktop; wraps on smaller screens. No overflow clipping
+ * here — the filter dropdowns are absolutely positioned and must escape.
  */
 export function JobsToolbar({ filters }: JobsToolbarProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
       {/* GET form keeps quick search server-rendered — no client JS needed. */}
       <form
         action="/dashboard/jobs"
-        className="flex w-full items-center gap-2 sm:w-80 md:w-96"
+        className="flex w-full items-center gap-2 sm:w-64 md:w-72 lg:w-80 lg:shrink-0"
       >
         {preservedParams(filters).map(([name, value]) => (
           <input key={name} type="hidden" name={name} value={value} />
@@ -45,7 +45,7 @@ export function JobsToolbar({ filters }: JobsToolbarProps) {
           name="q"
           defaultValue={filters.query}
           placeholder="Search job titles, companies, or keywords..."
-          className="flex-1 rounded-sm"
+          className="min-w-0 flex-1 rounded-sm"
         />
         <Button
           type="submit"
@@ -58,8 +58,7 @@ export function JobsToolbar({ filters }: JobsToolbarProps) {
         </Button>
       </form>
 
-      {/* Filters, sort, and reset grouped on the right. */}
-      <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+      <div className="flex flex-wrap items-center gap-1.5 lg:ml-auto lg:flex-nowrap lg:shrink-0">
         <JobsFilterBar filters={filters} />
         <JobsSortButton filters={filters} />
         <JobsClearFilters filters={filters} />

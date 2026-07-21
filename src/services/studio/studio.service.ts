@@ -177,6 +177,48 @@ export async function getOptimizedResumeById(userId: string, resumeId: string) {
 }
 
 /**
+ * Loads an optimized resume with the job it targets — used by manual
+ * edit/re-score flows that need the job description for analysis.
+ */
+export async function getOptimizedResumeWithJob(userId: string, resumeId: string) {
+  return prisma.resume.findFirst({
+    where: { id: resumeId, userId, type: "OPTIMIZED" },
+    select: {
+      id: true,
+      content: true,
+      analysis: true,
+      job: {
+        select: { id: true, title: true, company: true, description: true },
+      },
+    },
+  });
+}
+
+/** Persists manually edited optimized-resume content. */
+export async function updateOptimizedResumeContent(
+  resumeId: string,
+  content: OptimizedResumeContent
+) {
+  return prisma.resume.update({
+    where: { id: resumeId },
+    data: { content: content as object },
+    select: { id: true },
+  });
+}
+
+/** Replaces the "after" report in the stored analysis snapshot. */
+export async function updateOptimizedResumeAnalysis(
+  resumeId: string,
+  analysis: StudioAnalysisSnapshot
+) {
+  return prisma.resume.update({
+    where: { id: resumeId },
+    data: { analysis: analysis as object },
+    select: { id: true },
+  });
+}
+
+/**
  * Marks the user's application for a job as APPLIED, attaching the
  * job's optimized resume when one exists (falls back to the latest
  * master). Creates the application row if the job was never saved.

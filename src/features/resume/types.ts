@@ -1,4 +1,15 @@
-export type { ParsedResumeData, ParsedEducation, ParsedExperience } from "@/services/resumes/parsers/types";
+export type {
+  ParsedResumeData,
+  ParsedEducation,
+  ParsedExperience,
+  ParsedProject,
+  ParsedCertification,
+  ParsedSimpleItem,
+  ParsedSkillGroup,
+  ParsedLink,
+  ParsedCustomSection,
+  ParsedCustomSectionItem,
+} from "@/services/resumes/parsers/types";
 export { normalizeParsedResumeData } from "@/services/resumes/parsers/types";
 
 export type ResumeListItem = {

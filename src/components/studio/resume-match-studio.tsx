@@ -1,21 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
   Download,
-  FileText,
+  Eye,
   Info,
   Loader2,
+  PenLine,
   RefreshCw,
+  Save,
   Send,
   Sparkles,
   Target,
   Upload,
 } from "lucide-react";
 
+import { FileUpload } from "@/components/resume/file-upload";
 import { MatchReportCard } from "@/components/studio/match-report-card";
+import { OptimizedResumeEditor } from "@/components/studio/optimized-resume-editor";
 import { OptimizedResumePreview } from "@/components/studio/optimized-resume-preview";
 import { ScoreImprovementCard } from "@/components/studio/score-improvement-card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +32,10 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { applyWithResume } from "@/features/studio/actions/apply-with-resume";
+import {
+  rescoreOptimizedResume,
+  updateOptimizedResume,
+} from "@/features/studio/actions/update-optimized-resume";
 import { useAsyncAction } from "@/hooks/use-async-action";
 import { nativeSelectClassName } from "@/lib/native-select";
 import { cn } from "@/lib/utils";
@@ -61,6 +69,18 @@ type ResumeMatchStudioProps = {
   applicationStatus: string | null;
 };
 
+type WorkspaceTab = "report" | "edit" | "preview";
+
+const WORKSPACE_TABS: Array<{
+  id: WorkspaceTab;
+  label: string;
+  icon: typeof Target;
+}> = [
+  { id: "report", label: "Analysis", icon: Target },
+  { id: "edit", label: "Edit resume", icon: PenLine },
+  { id: "preview", label: "Preview & export", icon: Eye },
+];
+
 function formatUploadedAt(isoDate: string): string {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -69,11 +89,10 @@ function formatUploadedAt(isoDate: string): string {
 }
 
 /**
- * The AI Resume Studio workflow for one job:
- * pick a master resume → analyze match → review report →
- * generate/regenerate optimized resume → compare / download / apply.
- *
- * AI is only called on explicit user action to keep API costs down.
+ * The job-specific resume optimization workspace:
+ * pick a master resume → analyze match → review report → generate a
+ * tailored version → edit sections → recalculate score → preview,
+ * download, apply. AI is only called on explicit user action.
  */
 export function ResumeMatchStudio({
   jobId,
@@ -82,6 +101,7 @@ export function ResumeMatchStudio({
   initialOptimized,
   applicationStatus,
 }: ResumeMatchStudioProps) {
+  const router = useRouter();
   // Default to the newest upload — analyzing with the latest resume is
   // almost always what the user wants after uploading a new version.
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -94,10 +114,19 @@ export function ResumeMatchStudio({
     initialReport ? (initialOptimized?.parentResumeId ?? null) : null
   );
   const [optimized, setOptimized] = useState<OptimizedState | null>(initialOptimized);
+  // Local editing copy of the optimized content. `dirty` = has edits
+  // that aren't saved to the server yet.
+  const [draft, setDraft] = useState<OptimizedResumeContent | null>(
+    initialOptimized?.content ?? null
+  );
+  const [dirty, setDirty] = useState(false);
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("report");
   const analyzeAction = useAsyncAction();
   const generateAction = useAsyncAction();
   const applyAction = useAsyncAction();
   const downloadAction = useAsyncAction();
+  const saveAction = useAsyncAction();
+  const rescoreAction = useAsyncAction();
   const [error, setError] = useState<string | null>(null);
   const [isApplied, setIsApplied] = useState(applicationStatus === "APPLIED");
 
@@ -126,22 +155,20 @@ export function ResumeMatchStudio({
 
   if (!selected) {
     return (
-      <Card className="border-border/60 border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-          <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-            <Upload className="size-6" />
-          </span>
-          <p className="mt-4 font-medium">Upload your master resume first</p>
-          <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            The studio compares your master resume against this job and
-            generates a tailored version — upload one to get started.
-          </p>
-          <Button asChild className="mt-4">
-            <Link href="/dashboard/resume-studio">
-              <FileText className="size-4" />
-              Go to RS
-            </Link>
-          </Button>
+      <Card className="border-border/60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="size-5 text-primary" />
+            Upload your master resume
+          </CardTitle>
+          <CardDescription>
+            The workspace compares your master resume against this job,
+            scores the match, and generates a tailored version. Upload one
+            to get started — no need to leave this page.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FileUpload onUploadSuccess={() => router.refresh()} />
         </CardContent>
       </Card>
     );
@@ -208,8 +235,57 @@ export function ResumeMatchStudio({
           content: data.content,
           report: data.optimizedReport ?? null,
         });
+        setDraft(data.content);
+        setDirty(false);
+        setActiveTab("report");
       } catch {
         setError("Network error. Please try again.");
+      }
+    });
+  };
+
+  /** Persists draft edits; returns the saved content or null on failure. */
+  const persistDraft = async (): Promise<OptimizedResumeContent | null> => {
+    if (!optimized || !draft) return optimized?.content ?? null;
+    if (!dirty) return optimized.content;
+
+    const result = await updateOptimizedResume(optimized.resumeId, draft);
+
+    if (!result.success) {
+      setError(result.error);
+      return null;
+    }
+
+    setOptimized((prev) => (prev ? { ...prev, content: result.content } : prev));
+    setDraft(result.content);
+    setDirty(false);
+    return result.content;
+  };
+
+  const saveEdits = () => {
+    void saveAction.run(async () => {
+      setError(null);
+      await persistDraft();
+    });
+  };
+
+  const recalculate = () => {
+    void rescoreAction.run(async () => {
+      if (!optimized) return;
+      setError(null);
+
+      // Unsaved edits must be persisted first — the score is computed
+      // server-side from the stored content.
+      const content = await persistDraft();
+      if (content === null) return;
+
+      const result = await rescoreOptimizedResume(optimized.resumeId);
+
+      if (result.success) {
+        setOptimized((prev) => (prev ? { ...prev, report: result.report } : prev));
+        setActiveTab("report");
+      } else {
+        setError(result.error);
       }
     });
   };
@@ -230,6 +306,12 @@ export function ResumeMatchStudio({
     if (!optimized) return;
 
     void downloadAction.run(async () => {
+      setError(null);
+
+      // Export renders the stored content — save pending edits first.
+      const content = await persistDraft();
+      if (content === null) return;
+
       const response = await fetch(
         `/api/studio/resumes/${optimized.resumeId}/export?format=pdf`
       );
@@ -250,13 +332,15 @@ export function ResumeMatchStudio({
   };
 
   const comparisonSource = optimizedParent ?? selected;
+  const busy =
+    saveAction.pending || rescoreAction.pending || generateAction.pending;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Master resume picker — shown whenever there is more than one. */}
       {masters.length > 1 && (
-        <Card className="border-border/60">
-          <CardContent className="flex flex-col gap-2 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <Card className="border-border/60" size="sm">
+          <CardContent className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Label htmlFor="studio-resume" className="shrink-0">
               Master resume to use
             </Label>
@@ -280,8 +364,8 @@ export function ResumeMatchStudio({
         </Card>
       )}
 
-      {/* Step 1 — Analyze */}
-      {!report ? (
+      {/* Before anything is generated: analyze → report → generate CTA. */}
+      {!optimized && !report && (
         <Card className="border-border/60">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -306,40 +390,38 @@ export function ResumeMatchStudio({
             </Button>
           </CardContent>
         </Card>
-      ) : (
-        <>
-          {reportIsStale && (
-            <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-              <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <p className="text-sm text-amber-800 dark:text-amber-300">
-                This analysis was made with{" "}
-                <span className="font-semibold">
-                  {reportResume?.fileName ?? "a previous resume"}
-                </span>
-                . You selected{" "}
-                <span className="font-semibold">{selected.fileName}</span> — click{" "}
-                <span className="font-semibold">Re-analyze</span> to compare it
-                against this job.
-              </p>
-            </div>
-          )}
+      )}
 
+      {reportIsStale && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <Info className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            This analysis was made with{" "}
+            <span className="font-semibold">
+              {reportResume?.fileName ?? "a previous resume"}
+            </span>
+            . You selected{" "}
+            <span className="font-semibold">{selected.fileName}</span> — click{" "}
+            <span className="font-semibold">Re-analyze</span> to compare it
+            against this job.
+          </p>
+        </div>
+      )}
+
+      {/* Report exists but nothing generated yet. */}
+      {!optimized && report && (
+        <>
           <MatchReportCard report={report} />
 
           <Card className="border-primary/30 bg-primary/5">
             <CardContent className="flex flex-col items-start justify-between gap-4 py-5 sm:flex-row sm:items-center">
               <div>
                 <p className="font-semibold">
-                  {optimized
-                    ? "Optimized resume ready"
-                    : "Ready to tailor your resume for this job?"}
+                  Ready to tailor your resume for this job?
                 </p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {optimized
-                    ? optimizedParent
-                      ? `Generated from ${optimizedParent.fileName} — regenerate to use ${selected.fileName}.`
-                      : "Saved for this job — review the comparison below."
-                    : "The AI rewrites and reorders your existing content only. Nothing is invented."}
+                  The AI rewrites and reorders your existing content only.
+                  Nothing is invented — and you can edit every section after.
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -356,29 +438,14 @@ export function ResumeMatchStudio({
                   )}
                   {reportIsStale ? `Re-analyze with ${selected.fileName}` : "Re-analyze"}
                 </Button>
-                {!optimized ? (
-                  <Button onClick={generate} disabled={generateAction.pending} size="lg">
-                    {generateAction.pending ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="size-4" />
-                    )}
-                    {generateAction.pending ? "Generating..." : "Generate Optimized Resume"}
-                  </Button>
-                ) : (
-                  optimized.parentResumeId !== selected.id && (
-                    <Button onClick={generate} disabled={generateAction.pending}>
-                      {generateAction.pending ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="size-4" />
-                      )}
-                      {generateAction.pending
-                        ? "Regenerating..."
-                        : "Regenerate with selected resume"}
-                    </Button>
-                  )
-                )}
+                <Button onClick={generate} disabled={generateAction.pending} size="lg">
+                  {generateAction.pending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  {generateAction.pending ? "Generating..." : "Generate Optimized Resume"}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -387,21 +454,56 @@ export function ResumeMatchStudio({
 
       {error && <p className="text-sm font-medium text-destructive">{error}</p>}
 
-      {/* Step 2 — Compare, download, apply */}
+      {/* Full workspace once an optimized resume exists. */}
       {optimized && (
         <div className="space-y-4">
-          {optimized.report && (
-            <ScoreImprovementCard original={report} optimized={optimized.report} />
-          )}
+          {/* Tab bar + primary actions. */}
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="inline-flex w-fit items-center gap-1 rounded-lg border border-border/60 bg-muted/40 p-1">
+              {WORKSPACE_TABS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                    activeTab === id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Icon className="size-4" />
+                  {label}
+                  {id === "edit" && dirty && (
+                    <span
+                      className="size-1.5 rounded-full bg-amber-500"
+                      title="Unsaved changes"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="text-lg font-semibold">Original vs. Optimized</h3>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
+                onClick={recalculate}
+                disabled={busy}
+                title="Re-score the tailored resume against this job"
+              >
+                {rescoreAction.pending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Target className="size-4" />
+                )}
+                Recalculate score
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={downloadPdf}
-                disabled={downloadAction.pending}
+                disabled={downloadAction.pending || busy}
               >
                 {downloadAction.pending ? (
                   <Loader2 className="size-4 animate-spin" />
@@ -410,33 +512,10 @@ export function ResumeMatchStudio({
                 )}
                 Download PDF
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                title="DOCX export is coming soon"
-              >
-                <Download className="size-4" />
-                DOCX (soon)
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={generate}
-                disabled={generateAction.pending}
-                title={`Regenerate using ${selected.fileName}`}
-              >
-                {generateAction.pending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-4" />
-                )}
-                Regenerate
-              </Button>
               {isApplied ? (
                 <Button size="sm" variant="secondary" disabled>
                   <CheckCircle2 className="size-4 text-emerald-500" />
-                  Applied with this resume
+                  Applied
                 </Button>
               ) : (
                 <Button size="sm" onClick={apply} disabled={applyAction.pending}>
@@ -451,43 +530,160 @@ export function ResumeMatchStudio({
             </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          {/* Analysis tab — scores, gaps, recommendations. */}
+          {activeTab === "report" && (
+            <div className="space-y-4">
+              {optimized.report && (
+                <ScoreImprovementCard original={report} optimized={optimized.report} />
+              )}
+              {(optimized.report ?? report) && (
+                <MatchReportCard report={(optimized.report ?? report)!} />
+              )}
+
+              <Card className="border-border/60" size="sm">
+                <CardContent className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+                  <p className="text-sm text-muted-foreground">
+                    {optimizedParent
+                      ? `Tailored from ${optimizedParent.fileName} (v${optimized.content.meta.version}).`
+                      : `Tailored resume v${optimized.content.meta.version}.`}{" "}
+                    Edit any section, then recalculate to see the new score.
+                  </p>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={analyze}
+                      disabled={analyzeAction.pending}
+                      title="Re-run the analysis of the master resume"
+                    >
+                      {analyzeAction.pending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <RefreshCw className="size-4" />
+                      )}
+                      Re-analyze master
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={generate}
+                      disabled={generateAction.pending}
+                      title={`Regenerate from ${selected.fileName} — replaces manual edits`}
+                    >
+                      {generateAction.pending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="size-4" />
+                      )}
+                      Regenerate
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Edit tab — structured section editing. */}
+          {activeTab === "edit" && draft && (
             <Card className="border-border/60">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Original (master)</CardTitle>
-                <CardDescription>{comparisonSource.fileName}</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <PenLine className="size-4 text-primary" />
+                    Edit tailored resume
+                  </CardTitle>
+                  <CardDescription>
+                    Changes are yours — regenerating with AI will replace them.
+                  </CardDescription>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={saveEdits}
+                    disabled={!dirty || busy}
+                  >
+                    {saveAction.pending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Save className="size-4" />
+                    )}
+                    {dirty ? "Save changes" : "Saved"}
+                  </Button>
+                  <Button size="sm" onClick={recalculate} disabled={busy}>
+                    {rescoreAction.pending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Target className="size-4" />
+                    )}
+                    Save & recalculate
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                {comparisonSource.rawText ? (
-                  <pre className="max-h-[560px] overflow-y-auto whitespace-pre-wrap font-sans text-sm text-muted-foreground">
-                    {comparisonSource.rawText}
-                  </pre>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Original text preview unavailable. Run the analysis once and
-                    refresh, or re-upload the resume.
-                  </p>
-                )}
+                <OptimizedResumeEditor
+                  content={draft}
+                  disabled={busy}
+                  onChange={(content) => {
+                    setDraft(content);
+                    setDirty(true);
+                  }}
+                />
               </CardContent>
             </Card>
+          )}
 
-            <Card className="border-primary/30">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Sparkles className="size-4 text-primary" />
-                  Optimized for this job
-                </CardTitle>
-                <CardDescription>
-                  Version {optimized.content.meta.version}
-                  {optimizedParent ? ` — from ${optimizedParent.fileName}` : ""} —
-                  saved automatically
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="max-h-[560px] overflow-y-auto">
-                <OptimizedResumePreview content={optimized.content} />
-              </CardContent>
-            </Card>
-          </div>
+          {/* Preview tab — original vs tailored, side by side. */}
+          {activeTab === "preview" && (
+            <div className="space-y-3">
+              {dirty && (
+                <div className="flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+                  <Info className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <p className="text-sm text-amber-800 dark:text-amber-300">
+                    Previewing unsaved edits — they&apos;ll be saved
+                    automatically when you download or recalculate.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <Card className="border-border/60">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Original (master)</CardTitle>
+                    <CardDescription>{comparisonSource.fileName}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {comparisonSource.rawText ? (
+                      <pre className="max-h-[640px] overflow-y-auto whitespace-pre-wrap font-sans text-sm text-muted-foreground">
+                        {comparisonSource.rawText}
+                      </pre>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Original text preview unavailable. Run the analysis once
+                        and refresh, or re-upload the resume.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-primary/30">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Sparkles className="size-4 text-primary" />
+                      Optimized for this job
+                    </CardTitle>
+                    <CardDescription>
+                      Version {optimized.content.meta.version}
+                      {optimizedParent ? ` — from ${optimizedParent.fileName}` : ""}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="max-h-[640px] overflow-y-auto">
+                    <OptimizedResumePreview content={draft ?? optimized.content} />
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

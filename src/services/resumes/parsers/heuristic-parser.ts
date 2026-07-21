@@ -1,21 +1,38 @@
 import type { ResumeParser } from "@/services/resumes/parsers/parser.interface";
 import {
+  findMissingSections,
+  linesToCustomItems,
+  preserveMissingSections,
+} from "@/services/resumes/parsers/completeness";
+import {
+  splitTextIntoSections,
+  type CanonicalSectionKind,
+  type TextSection,
+} from "@/services/resumes/parsers/sections";
+import {
   createEmptyParsedResumeData,
+  type ParsedCertification,
+  type ParsedCustomSection,
   type ParsedEducation,
   type ParsedExperience,
+  type ParsedLink,
+  type ParsedProject,
   type ParsedResumeData,
+  type ParsedSimpleItem,
+  type ParsedSkillGroup,
 } from "@/services/resumes/parsers/types";
 
 /**
- * Generic rule-based resume parser.
+ * Generic rule-based resume parser (AI fallback).
  *
- * Pipeline: normalize lines → detect section boundaries (many heading
- * variants) → split sections into entry blocks (date-range and
- * header-shape signals) → contextually map lines within each block to
- * company / role / period / location / description.
+ * Pipeline: normalize lines → detect section boundaries (shared
+ * semantic detector, many heading variants) → split sections into entry
+ * blocks (date-range and header-shape signals) → contextually map lines
+ * within each block to structured fields.
  *
  * Nothing here is specific to one resume; every rule is a general
  * pattern (date grammar, title keywords, separator conventions).
+ * Unknown sections are preserved as custom sections, never dropped.
  */
 
 // ---------------------------------------------------------------------------
@@ -44,99 +61,13 @@ export function extractPeriod(line: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Section detection
-// ---------------------------------------------------------------------------
-
-type SectionKind =
-  | "experience"
-  | "education"
-  | "skills"
-  | "projects"
-  | "certifications"
-  | "summary"
-  | "other";
-
-const SECTION_PATTERNS: Array<{ kind: SectionKind; pattern: RegExp }> = [
-  {
-    kind: "experience",
-    pattern:
-      /^(?:professional\s+|work\s+|relevant\s+|employment\s+)?(?:experience|history)s?$|^employment$|^career\s+(?:history|summary)$|^work$/i,
-  },
-  {
-    kind: "education",
-    pattern:
-      /^education(?:al)?(?:\s+(?:background|qualifications?|details?))?$|^academic(?:s|\s+(?:background|qualifications?|details?))?$|^qualifications?$/i,
-  },
-  {
-    kind: "skills",
-    pattern:
-      /^(?:technical\s+|core\s+|key\s+|primary\s+)?skills?(?:\s*(?:&|and)\s*(?:abilities|competencies|tools|technologies|interests))?$|^technologies$|^tech(?:nical)?\s+stack$|^tools?(?:\s*(?:&|and)\s*technologies)?$|^competencies$|^areas?\s+of\s+expertise$/i,
-  },
-  {
-    kind: "projects",
-    pattern: /^(?:personal\s+|academic\s+|key\s+|notable\s+)?projects?$/i,
-  },
-  {
-    kind: "certifications",
-    pattern:
-      /^certifications?(?:\s*(?:&|and)\s*(?:licenses?|training|courses?))?$|^licenses?$|^courses?(?:\s*(?:&|and)\s*certifications?)?$|^achievements?$|^awards?(?:\s*(?:&|and)\s*honors?)?$|^honors?$/i,
-  },
-  {
-    kind: "summary",
-    pattern:
-      /^(?:professional\s+|career\s+)?(?:summary|objective|profile|about(?:\s+me)?)$/i,
-  },
-];
-
-/**
- * A line is a section heading when its text (sans decoration) matches a
- * known pattern and it "looks like" a heading — short, not a bullet,
- * not part of a sentence.
- */
-function detectSectionHeading(line: string): SectionKind | null {
-  const cleaned = normalizeWhitespace(
-    line.replace(/^[#>*\-=_\s|]+/, "").replace(/[:\-=_\s|]+$/, "")
-  );
-
-  if (!cleaned || cleaned.length > 48) return null;
-  if (/^[-•●▪◦*]/.test(line.trim())) return null;
-
-  for (const { kind, pattern } of SECTION_PATTERNS) {
-    if (pattern.test(cleaned)) return kind;
-  }
-  return null;
-}
-
-type Section = { kind: SectionKind; lines: string[] };
-
-/** Splits resume lines into titled sections; leading lines are "other". */
-export function splitIntoSections(lines: string[]): Section[] {
-  const sections: Section[] = [{ kind: "other", lines: [] }];
-
-  for (const line of lines) {
-    const heading = detectSectionHeading(line);
-    if (heading) {
-      sections.push({ kind: heading, lines: [] });
-      continue;
-    }
-    sections[sections.length - 1].lines.push(line);
-  }
-
-  return sections;
-}
-
-function sectionLines(sections: Section[], kind: SectionKind): string[] {
-  return sections
-    .filter((section) => section.kind === kind)
-    .flatMap((section) => section.lines);
-}
-
-// ---------------------------------------------------------------------------
 // Generic helpers
 // ---------------------------------------------------------------------------
 
 const EMAIL_REGEX = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
-const URL_REGEX = /https?:\/\/|www\.|linkedin\.com|github\.com/i;
+const URL_REGEX =
+  /\b(?:https?:\/\/[^\s|,;)]+|www\.[^\s|,;)]+|(?:linkedin\.com|github\.com|gitlab\.com|behance\.net|dribbble\.com|medium\.com|dev\.to|leetcode\.com|kaggle\.com)\/[^\s|,;)]+)/gi;
+const ANY_URL_HINT = /https?:\/\/|www\.|linkedin\.com|github\.com/i;
 const PHONE_REGEX = /(?:\+?\d[\d\s().-]{7,}\d)/;
 const BULLET_REGEX = /^[-•●▪◦‣·*+➤»]\s*/;
 
@@ -194,6 +125,12 @@ function looksLikeCompany(value: string): boolean {
   return STRONG_COMPANY_REGEX.test(value) || WEAK_COMPANY_REGEX.test(value);
 }
 
+function sectionLines(sections: TextSection[], kind: CanonicalSectionKind): string[] {
+  return sections
+    .filter((section) => section.kind === kind)
+    .flatMap((section) => section.lines);
+}
+
 // ---------------------------------------------------------------------------
 // Contact extraction
 // ---------------------------------------------------------------------------
@@ -202,14 +139,58 @@ function extractEmail(text: string): string | null {
   return text.match(EMAIL_REGEX)?.[0] ?? null;
 }
 
+function extractPhone(lines: string[]): string | null {
+  for (const rawLine of lines.slice(0, 12)) {
+    // Skip date-heavy lines so periods aren't mistaken for phones, and
+    // strip URLs so digits inside profile links don't match.
+    if (PERIOD_REGEX.test(rawLine)) continue;
+    const line = rawLine.replace(URL_REGEX, " ");
+    const match = line.match(PHONE_REGEX);
+    if (match) {
+      const digits = match[0].replace(/\D/g, "");
+      if (digits.length >= 8 && digits.length <= 15) {
+        return normalizeWhitespace(match[0]);
+      }
+    }
+  }
+  return null;
+}
+
+const LINK_LABELS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /linkedin\.com/i, label: "LinkedIn" },
+  { pattern: /github\.com/i, label: "GitHub" },
+  { pattern: /gitlab\.com/i, label: "GitLab" },
+  { pattern: /behance\.net/i, label: "Behance" },
+  { pattern: /dribbble\.com/i, label: "Dribbble" },
+  { pattern: /medium\.com|dev\.to/i, label: "Blog" },
+  { pattern: /leetcode\.com/i, label: "LeetCode" },
+  { pattern: /kaggle\.com/i, label: "Kaggle" },
+];
+
+function extractLinks(text: string): ParsedLink[] {
+  const seen = new Set<string>();
+  const links: ParsedLink[] = [];
+
+  for (const match of text.matchAll(URL_REGEX)) {
+    const url = match[0].replace(/[.,;)\]]+$/, "");
+    const key = url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const label = LINK_LABELS.find(({ pattern }) => pattern.test(url))?.label ?? null;
+    links.push({ label, url });
+  }
+
+  return links.slice(0, 10);
+}
+
 function extractName(lines: string[], email: string | null): string | null {
   for (const line of lines.slice(0, 10)) {
     const cleaned = normalizeWhitespace(line);
     if (!cleaned || cleaned.length > 60) continue;
-    if (EMAIL_REGEX.test(cleaned) || URL_REGEX.test(cleaned)) continue;
+    if (EMAIL_REGEX.test(cleaned) || ANY_URL_HINT.test(cleaned)) continue;
     if (PHONE_REGEX.test(cleaned)) continue;
     if (/^(resume|curriculum vitae|cv)$/i.test(cleaned)) continue;
-    if (detectSectionHeading(cleaned)) continue;
     if (looksLikeRole(cleaned)) continue;
     if (PERIOD_REGEX.test(cleaned)) continue;
 
@@ -235,6 +216,37 @@ function extractName(lines: string[], email: string | null): string | null {
   return null;
 }
 
+function extractLocation(lines: string[], name: string | null): string | null {
+  for (const line of lines.slice(0, 8)) {
+    for (const part of splitHeaderParts(line)) {
+      if (name && part === name) continue;
+      if (EMAIL_REGEX.test(part) || ANY_URL_HINT.test(part)) continue;
+      if (PHONE_REGEX.test(part)) continue;
+      if (looksLikeRole(part) || looksLikeCompany(part)) continue;
+      // Require a comma form ("City, Country") or remote keyword to keep
+      // this conservative — bare words are too ambiguous up top.
+      if (looksLikeLocation(part) && (part.includes(",") || /remote/i.test(part))) {
+        return part;
+      }
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Summary
+// ---------------------------------------------------------------------------
+
+function extractSummary(sections: TextSection[]): string | null {
+  const lines = sectionLines(sections, "summary")
+    .map(stripBullet)
+    .map(normalizeWhitespace)
+    .filter(Boolean);
+
+  if (lines.length === 0) return null;
+  return lines.join(" ").slice(0, 1200);
+}
+
 // ---------------------------------------------------------------------------
 // Skills
 // ---------------------------------------------------------------------------
@@ -250,16 +262,38 @@ const COMMON_SKILLS = [
   "Kafka", "RabbitMQ", "Selenium", "Cypress", "Jest", "Playwright",
 ];
 
-function extractSkills(sections: Section[], fullText: string): string[] {
-  const lines = sectionLines(sections, "skills");
-
-  const fromSection = lines
-    .map(stripBullet)
-    // "Languages: JavaScript, TypeScript" → drop the category label.
-    .map((line) => (line.includes(":") ? line.split(":").slice(1).join(":") : line))
-    .flatMap((line) => line.split(/[,|•·;/]+/))
+function splitSkillList(value: string): string[] {
+  return value
+    .split(/[,|•·;/]+/)
     .map((item) => normalizeWhitespace(item))
     .filter((item) => item.length > 1 && item.length < 40);
+}
+
+function extractSkills(
+  sections: TextSection[],
+  fullText: string
+): { skills: string[]; skillGroups: ParsedSkillGroup[] } {
+  const lines = sectionLines(sections, "skills");
+
+  const skillGroups: ParsedSkillGroup[] = [];
+  const flat: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = stripBullet(rawLine);
+    const colonIndex = line.indexOf(":");
+
+    // "Languages: JavaScript, TypeScript" — preserve the category.
+    if (colonIndex > 0 && colonIndex < 40) {
+      const name = normalizeWhitespace(line.slice(0, colonIndex));
+      const skills = splitSkillList(line.slice(colonIndex + 1));
+      if (name && skills.length > 0) {
+        skillGroups.push({ name, skills });
+        continue;
+      }
+    }
+
+    flat.push(...splitSkillList(line));
+  }
 
   const lowerText = fullText.toLowerCase();
   const detected = COMMON_SKILLS.filter((skill) =>
@@ -268,7 +302,11 @@ function extractSkills(sections: Section[], fullText: string): string[] {
 
   const seen = new Set<string>();
   const skills: string[] = [];
-  for (const skill of [...fromSection, ...detected]) {
+  for (const skill of [
+    ...flat,
+    ...skillGroups.flatMap((group) => group.skills),
+    ...detected,
+  ]) {
     const key = skill.toLowerCase();
     if (!seen.has(key)) {
       seen.add(key);
@@ -276,7 +314,7 @@ function extractSkills(sections: Section[], fullText: string): string[] {
     }
   }
 
-  return skills.slice(0, 30);
+  return { skills: skills.slice(0, 40), skillGroups: skillGroups.slice(0, 10) };
 }
 
 // ---------------------------------------------------------------------------
@@ -413,7 +451,7 @@ function assignHeaderParts(headerLines: string[]): {
   return { company, role, location };
 }
 
-function extractExperience(sections: Section[]): ParsedExperience[] {
+function extractExperience(sections: TextSection[]): ParsedExperience[] {
   const lines = sectionLines(sections, "experience");
   if (lines.length === 0) return [];
 
@@ -464,11 +502,88 @@ function extractExperience(sections: Section[]): ParsedExperience[] {
       role,
       period,
       location,
+      bullets: bodyLines.length > 0 ? bodyLines : undefined,
       description: bodyLines.length > 0 ? bodyLines.join("\n") : undefined,
     });
   }
 
   return entries.slice(0, 12);
+}
+
+// ---------------------------------------------------------------------------
+// Projects extraction
+// ---------------------------------------------------------------------------
+
+const TECH_PREFIX_REGEX =
+  /^(?:tech(?:nologies)?(?:\s+(?:used|stack))?|stack|built\s+with|tools)\s*[:—-]\s*/i;
+
+function extractProjects(sections: TextSection[]): ParsedProject[] {
+  const lines = sectionLines(sections, "projects");
+  if (lines.length === 0) return [];
+
+  const blocks = splitIntoBlocks(lines);
+  const projects: ParsedProject[] = [];
+
+  for (const block of blocks) {
+    let name: string | undefined;
+    let period: string | undefined;
+    let techStack: string[] | undefined;
+    const bullets: string[] = [];
+    const links: ParsedLink[] = [];
+
+    for (const rawLine of block) {
+      const line = normalizeWhitespace(rawLine);
+      if (!line) continue;
+
+      for (const link of extractLinks(line)) {
+        if (!links.some((existing) => existing.url === link.url)) {
+          links.push(link);
+        }
+      }
+
+      const content = stripBullet(line);
+      const techMatch = content.match(TECH_PREFIX_REGEX);
+      if (techMatch) {
+        const stack = splitSkillList(content.replace(TECH_PREFIX_REGEX, ""));
+        if (stack.length > 0) {
+          techStack = [...(techStack ?? []), ...stack];
+          continue;
+        }
+      }
+
+      if (isBullet(rawLine)) {
+        bullets.push(content);
+        continue;
+      }
+
+      const foundPeriod = extractPeriod(line);
+      if (foundPeriod && !period) period = foundPeriod;
+
+      const withoutPeriod = normalizeWhitespace(
+        foundPeriod ? line.replace(foundPeriod, " ").replace(/[|•·,–—()-]\s*$/, "") : line
+      );
+
+      if (!name && withoutPeriod) {
+        // First header line = project name (URL fragments removed).
+        name = normalizeWhitespace(withoutPeriod.replace(URL_REGEX, "")) || undefined;
+      } else if (withoutPeriod) {
+        bullets.push(withoutPeriod);
+      }
+    }
+
+    if (!name && bullets.length === 0) continue;
+
+    projects.push({
+      name: name ?? "",
+      period,
+      techStack: techStack && techStack.length > 0 ? techStack : undefined,
+      bullets: bullets.length > 0 ? bullets : undefined,
+      description: bullets.length > 0 ? bullets.join("\n") : undefined,
+      links: links.length > 0 ? links : undefined,
+    });
+  }
+
+  return projects.slice(0, 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -478,7 +593,10 @@ function extractExperience(sections: Section[]): ParsedExperience[] {
 const DEGREE_REGEX =
   /\b(?:b\.?\s?(?:tech|e|sc|s|a|com|ba)|m\.?\s?(?:tech|e|sc|s|a|com|ba|phil)|ph\.?d|bachelor(?:'?s)?|master(?:'?s)?|doctorate|diploma|associate|mba|bca|mca|hsc|ssc|(?:10|12)th|intermediate|matriculation|high\s+school|secondary)\b/i;
 
-function extractEducation(sections: Section[]): ParsedEducation[] {
+const GRADE_REGEX =
+  /\b(?:cgpa|gpa|percentage|grade|score)\s*[:=-]?\s*[\d.]+(?:\s*\/\s*\d+)?%?|\b[\d.]+\s*\/\s*(?:10|4)\b|\b\d{2}(?:\.\d+)?%/i;
+
+function extractEducation(sections: TextSection[]): ParsedEducation[] {
   const lines = sectionLines(sections, "education");
   if (lines.length === 0) return [];
 
@@ -489,10 +607,15 @@ function extractEducation(sections: Section[]): ParsedEducation[] {
     let institution: string | undefined;
     let degree: string | undefined;
     let period: string | undefined;
+    let grade: string | undefined;
+    const details: string[] = [];
 
     for (const rawLine of block) {
       const line = normalizeWhitespace(stripBullet(rawLine));
       if (!line) continue;
+
+      const foundGrade = line.match(GRADE_REGEX)?.[0];
+      if (foundGrade && !grade) grade = normalizeWhitespace(foundGrade);
 
       const foundPeriod = extractPeriod(line) ?? line.match(SINGLE_DATE_REGEX)?.[0];
       if (foundPeriod && !period) period = normalizeWhitespace(foundPeriod);
@@ -507,6 +630,8 @@ function extractEducation(sections: Section[]): ParsedEducation[] {
           degree = part;
         } else if (!institution) {
           institution = part;
+        } else if (part !== grade && !GRADE_REGEX.test(part)) {
+          details.push(part);
         }
       }
     }
@@ -517,10 +642,87 @@ function extractEducation(sections: Section[]): ParsedEducation[] {
       institution: institution ?? degree ?? "",
       degree: institution ? degree : undefined,
       period,
+      grade,
+      details: details.length > 0 ? details.slice(0, 6) : undefined,
     });
   }
 
   return entries.slice(0, 8);
+}
+
+// ---------------------------------------------------------------------------
+// Certifications / achievements / languages / interests / custom sections
+// ---------------------------------------------------------------------------
+
+function extractCertifications(sections: TextSection[]): ParsedCertification[] {
+  const lines = sectionLines(sections, "certifications");
+
+  return lines
+    .map(stripBullet)
+    .map(normalizeWhitespace)
+    .filter(Boolean)
+    .map((line) => {
+      const date = extractPeriod(line) ?? line.match(SINGLE_DATE_REGEX)?.[0];
+      const withoutDate = date
+        ? normalizeWhitespace(line.replace(date, " ").replace(/[|•·,–—()-]\s*$/, ""))
+        : line;
+
+      // "AWS Certified Developer — Amazon" → name + issuer.
+      const parts = withoutDate.split(/\s*(?:—|–|\||,|\bby\b)\s*/i).map(normalizeWhitespace).filter(Boolean);
+
+      return {
+        name: parts[0] ?? withoutDate,
+        issuer: parts.length > 1 ? parts.slice(1).join(", ") : undefined,
+        date: date ? normalizeWhitespace(date) : undefined,
+      };
+    })
+    .filter((entry) => entry.name)
+    .slice(0, 12);
+}
+
+function extractAchievements(sections: TextSection[]): ParsedSimpleItem[] {
+  const lines = sectionLines(sections, "achievements");
+
+  return lines
+    .map(stripBullet)
+    .map(normalizeWhitespace)
+    .filter(Boolean)
+    .map((line) => {
+      const date = extractPeriod(line) ?? line.match(SINGLE_DATE_REGEX)?.[0];
+      return {
+        title: line,
+        date: date ? normalizeWhitespace(date) : undefined,
+      };
+    })
+    .slice(0, 12);
+}
+
+function extractCommaList(sections: TextSection[], kind: CanonicalSectionKind): string[] {
+  const seen = new Set<string>();
+  const items: string[] = [];
+
+  for (const line of sectionLines(sections, kind)) {
+    for (const item of splitSkillList(stripBullet(line))) {
+      const key = item.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push(item);
+      }
+    }
+  }
+
+  return items.slice(0, 15);
+}
+
+function extractCustomSections(sections: TextSection[]): ParsedCustomSection[] {
+  return sections
+    .filter((section) => section.kind === "unknown")
+    .map((section) => ({
+      title: section.title,
+      items: linesToCustomItems(section.lines),
+    }))
+    .filter((section) => section.items.length > 0)
+    .slice(0, 8);
 }
 
 // ---------------------------------------------------------------------------
@@ -538,7 +740,7 @@ function normalizeLines(text: string): string[] {
 
 export class HeuristicResumeParser implements ResumeParser {
   readonly id = "heuristic";
-  readonly version = "2.0.0";
+  readonly version = "3.0.0";
   readonly source = "heuristic" as const;
 
   async parse(context: { text: string; fileName: string }): Promise<ParsedResumeData> {
@@ -549,16 +751,32 @@ export class HeuristicResumeParser implements ResumeParser {
       return parsed;
     }
 
-    const sections = splitIntoSections(lines);
+    const sections = splitTextIntoSections(lines);
     const email = extractEmail(context.text);
+    const name = extractName(lines, email);
+    const { skills, skillGroups } = extractSkills(sections, context.text);
 
     parsed.email = email;
-    parsed.name = extractName(lines, email);
-    parsed.skills = extractSkills(sections, context.text);
-    parsed.education = extractEducation(sections);
+    parsed.name = name;
+    parsed.phone = extractPhone(lines);
+    parsed.location = extractLocation(lines, name);
+    parsed.links = extractLinks(context.text);
+    parsed.summary = extractSummary(sections);
+    parsed.skills = skills;
+    parsed.skillGroups = skillGroups;
     parsed.experience = extractExperience(sections);
+    parsed.projects = extractProjects(sections);
+    parsed.education = extractEducation(sections);
+    parsed.certifications = extractCertifications(sections);
+    parsed.achievements = extractAchievements(sections);
+    parsed.languages = extractCommaList(sections, "languages");
+    parsed.interests = extractCommaList(sections, "interests");
+    parsed.additionalSections = extractCustomSections(sections);
 
-    return parsed;
+    // Safety net — preserve any detected source section that produced
+    // no structured output (idempotent when everything mapped).
+    const missing = findMissingSections(context.text, parsed);
+    return preserveMissingSections(context.text, parsed, missing);
   }
 }
 

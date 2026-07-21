@@ -13,6 +13,7 @@ type JSearchJob = {
   job_id: string;
   job_title?: string;
   employer_name?: string;
+  job_location?: string | null;
   job_city?: string | null;
   job_state?: string | null;
   job_country?: string | null;
@@ -25,11 +26,17 @@ type JSearchJob = {
   job_salary_currency?: string | null;
 };
 
+// v2 nests the job list under `data.jobs` (v1 had `data` as the array).
 type JSearchResponse = {
-  data?: JSearchJob[];
+  status?: string;
+  data?: {
+    jobs?: JSearchJob[];
+  };
 };
 
 function buildLocation(job: JSearchJob): string | null {
+  if (job.job_location?.trim()) return job.job_location.trim();
+
   const parts = [job.job_city, job.job_state, job.job_country]
     .map((part) => part?.trim())
     .filter(Boolean);
@@ -81,13 +88,14 @@ export class JSearchAdapter implements JobSourceAdapter {
       date_posted: "month",
     });
 
-    const url = `https://jsearch.p.rapidapi.com/search?${params}`;
+    // The legacy `/search` endpoint was removed; v2 is the current one.
+    const url = `https://jsearch.p.rapidapi.com/search-v2?${params}`;
     const data = await fetchJson<JSearchResponse>(this.source, url, {
       "x-rapidapi-key": apiKey,
       "x-rapidapi-host": "jsearch.p.rapidapi.com",
     });
 
-    return (data.data ?? [])
+    return (data.data?.jobs ?? [])
       .filter((job) => job.job_id && job.job_title)
       .map((job) => ({
         externalId: job.job_id,

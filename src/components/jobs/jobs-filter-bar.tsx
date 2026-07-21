@@ -118,7 +118,7 @@ export function JobsFilterBar({ filters }: JobsFilterBarProps) {
   return (
     <div
       ref={containerRef}
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-center gap-1.5 lg:flex-nowrap"
       role="group"
       aria-label="Job filters"
     >
@@ -178,7 +178,7 @@ export function FilterTrigger({ active, isOpen, label, icon, onClick }: FilterTr
       aria-expanded={isOpen}
       aria-haspopup="listbox"
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-sm border px-3 text-sm font-medium transition-colors",
+        "inline-flex h-8 shrink-0 items-center gap-1 rounded-sm border px-2.5 text-sm font-medium whitespace-nowrap transition-colors",
         active
           ? "border-primary bg-primary/10 text-primary hover:bg-primary/15"
           : "border-border/70 bg-background text-foreground hover:bg-muted/60",
@@ -186,7 +186,7 @@ export function FilterTrigger({ active, isOpen, label, icon, onClick }: FilterTr
       )}
     >
       {icon}
-      <span className="max-w-[12rem] truncate">{label}</span>
+      <span className="max-w-[8.5rem] truncate">{label}</span>
       <ChevronDown
         className={cn("size-3.5 opacity-60 transition-transform", isOpen && "rotate-180")}
       />

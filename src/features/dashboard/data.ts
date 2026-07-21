@@ -17,7 +17,7 @@ export type DashboardNavItem = {
 export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { label: "Jobs", href: "/dashboard/jobs", icon: Briefcase },
-  { label: "RS", href: "/dashboard/resume-studio", icon: FileText },
+  { label: "Resume Studio", href: "/dashboard/resume-studio", icon: FileText },
   { label: "Applications", href: "/dashboard/applications", icon: Send },
   { label: "Cold Email", href: "/dashboard/outreach", icon: Mail },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },

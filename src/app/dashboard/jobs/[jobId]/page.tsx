@@ -70,7 +70,7 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
   const savedAnalysis = normalizeAnalysisSnapshot(optimizedRow?.analysis);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <div>
         <Link
           href="/dashboard/jobs"
@@ -141,14 +141,14 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,380px)_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         <Card className="border-border/60 lg:sticky lg:top-6 lg:self-start">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Job description</CardTitle>
           </CardHeader>
           <CardContent>
             {job.description ? (
-              <div className="max-h-[70vh] overflow-y-auto whitespace-pre-line text-sm text-muted-foreground">
+              <div className="max-h-[calc(100vh-12rem)] overflow-y-auto whitespace-pre-line text-sm text-muted-foreground">
                 {job.description}
               </div>
             ) : (

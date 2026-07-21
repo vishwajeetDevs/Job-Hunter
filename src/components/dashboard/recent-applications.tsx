@@ -39,7 +39,7 @@ type RecentApplicationsProps = {
 export function RecentApplications({ applications }: RecentApplicationsProps) {
   return (
     <Card className="border-border/60">
-      <CardHeader className="flex flex-row items-center justify-between gap-4">
+      <CardHeader className="flex flex-row items-center justify-between gap-4 border-b border-border/60">
         <div>
           <CardTitle>Recent Applications</CardTitle>
           <CardDescription>

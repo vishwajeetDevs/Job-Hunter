@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 
 import { useLoadingBar } from "@/components/loading";
+import { Button } from "@/components/ui/button";
 import type { JobFilters } from "@/features/jobs/filters";
 
 type JobsClearFiltersProps = {
@@ -28,16 +29,19 @@ export function JobsClearFilters({ filters }: JobsClearFiltersProps) {
   if (!active) return null;
 
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon"
+      aria-label="Clear all filters"
+      title="Clear all filters"
+      className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
       onClick={() => {
         startNavigation();
         router.push("/dashboard/jobs");
       }}
-      className="inline-flex h-8 items-center gap-1.5 rounded-sm px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
     >
-      <X className="size-3.5" />
-      Clear all
-    </button>
+      <X className="size-4" />
+    </Button>
   );
 }

@@ -1,15 +1,12 @@
-import Link from "next/link";
-import { Briefcase, ChevronLeft, ChevronRight } from "lucide-react";
+import { Briefcase } from "lucide-react";
 
-import { JobCard } from "@/components/jobs/job-card";
 import { JobsFilterPersistence } from "@/components/jobs/jobs-filter-persistence";
+import { JobsInfiniteList } from "@/components/jobs/jobs-infinite-list";
 import { JobsToolbar } from "@/components/jobs/jobs-toolbar";
 import { RefreshJobsButton } from "@/components/jobs/refresh-jobs-button";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   hasActiveFilters,
-  jobsUrl,
   parseJobFilters,
   serializeJobFilters,
   type RawJobSearchParams,
@@ -24,19 +21,21 @@ type JobsPageProps = {
 
 export default async function JobsPage({ searchParams }: JobsPageProps) {
   const filters = parseJobFilters(await searchParams);
+  // Infinite scroll always starts from the first page; stale ?page=
+  // params from old links are ignored.
+  filters.page = 1;
 
   const { userId: clerkUserId } = await requireAuth();
   const user = await ensureDbUser(clerkUserId);
 
   const { jobs, total } = await listJobs({ userId: user.id, filters });
 
-  const totalPages = Math.max(1, Math.ceil(total / JOBS_PAGE_SIZE));
-  const page = Math.min(filters.page, totalPages);
   const filtersActive = hasActiveFilters(filters);
+  const filterQuery = serializeJobFilters(filters);
 
   return (
     <div className="space-y-6">
-      <JobsFilterPersistence currentQuery={serializeJobFilters(filters)} />
+      <JobsFilterPersistence currentQuery={filterQuery} />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -46,7 +45,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
           </h1>
           <p className="mt-1 text-muted-foreground">
             {total} job{total === 1 ? "" : "s"}
-            {filtersActive ? " matching your filters" : " aggregated from Greenhouse, Lever, and Ashby boards"}
+            {filtersActive ? " matching your filters" : " ready to explore"}
             .
           </p>
         </div>
@@ -72,45 +71,13 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {jobs.map((job) => (
-            <JobCard key={job.id} job={job} />
-          ))}
-        </div>
-      )}
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3">
-          {page > 1 ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link href={jobsUrl({ ...filters, page: page - 1 })}>
-                <ChevronLeft className="size-4" />
-                Previous
-              </Link>
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" disabled>
-              <ChevronLeft className="size-4" />
-              Previous
-            </Button>
-          )}
-          <span className="text-sm text-muted-foreground">
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link href={jobsUrl({ ...filters, page: page + 1 })}>
-                Next
-                <ChevronRight className="size-4" />
-              </Link>
-            </Button>
-          ) : (
-            <Button variant="outline" size="sm" disabled>
-              Next
-              <ChevronRight className="size-4" />
-            </Button>
-          )}
-        </div>
+        <JobsInfiniteList
+          key={filterQuery}
+          initialJobs={jobs}
+          total={total}
+          pageSize={JOBS_PAGE_SIZE}
+          filterQuery={filterQuery}
+        />
       )}
     </div>
   );

@@ -81,6 +81,53 @@ export function htmlToPlainText(html: string): string {
     .trim();
 }
 
+/**
+ * Collapses a multi-location list into a compact display string.
+ * ["Bangalore, India", "Chennai, India", "Flexible / Remote"] becomes
+ * "Bangalore, Chennai, India · Remote" — the shared country is written
+ * once and remote-style entries fold into a single "Remote" tag (kept in
+ * the string so work-mode classification still sees it).
+ */
+export function formatLocationList(names: string[]): string | null {
+  const seenCities = new Set<string>();
+  const cities: string[] = [];
+  const countries = new Set<string>();
+  let hasRemote = false;
+
+  for (const raw of names) {
+    const name = raw.trim();
+    if (!name) continue;
+
+    if (/\b(remote|flexible|anywhere|work from home)\b/i.test(name)) {
+      hasRemote = true;
+      continue;
+    }
+
+    const parts = name
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const city = parts.slice(0, -1).join(", ") || parts[0];
+    if (parts.length > 1) countries.add(parts[parts.length - 1]);
+
+    const key = city.toLowerCase();
+    if (!seenCities.has(key)) {
+      seenCities.add(key);
+      cities.push(city);
+    }
+  }
+
+  const segments: string[] = [];
+
+  if (cities.length > 0) {
+    const country = countries.size === 1 ? [...countries][0] : null;
+    segments.push(country ? `${cities.join(", ")}, ${country}` : cities.join(", "));
+  }
+  if (hasRemote) segments.push("Remote");
+
+  return segments.length > 0 ? segments.join(" · ") : null;
+}
+
 export function toDateOrNull(value: string | number | null | undefined): Date | null {
   if (value === null || value === undefined || value === "") return null;
   const date = new Date(value);
