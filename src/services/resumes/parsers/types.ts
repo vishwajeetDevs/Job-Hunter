@@ -8,6 +8,8 @@ export type ParsedExperience = {
   company: string;
   role?: string;
   period?: string;
+  location?: string;
+  techStack?: string[];
   description?: string;
 };
 
@@ -73,6 +75,13 @@ export function normalizeParsedResumeData(
           company: typeof item?.company === "string" ? item.company : "",
           role: typeof item?.role === "string" ? item.role : undefined,
           period: typeof item?.period === "string" ? item.period : undefined,
+          location:
+            typeof item?.location === "string" ? item.location : undefined,
+          techStack: Array.isArray(item?.techStack)
+            ? item.techStack.filter(
+                (s): s is string => typeof s === "string" && s.trim() !== ""
+              )
+            : undefined,
           description:
             typeof item?.description === "string"
               ? item.description

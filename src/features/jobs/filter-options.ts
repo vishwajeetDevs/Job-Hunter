@@ -65,10 +65,17 @@ export const RADIUS_OPTIONS_KM = [10, 25, 50, 100] as const;
 
 export type RadiusKm = (typeof RADIUS_OPTIONS_KM)[number];
 
+/**
+ * Fixed search radius applied automatically around a selected city.
+ * Radius is no longer user-configurable — selecting a location searches
+ * everything within this distance.
+ */
+export const DEFAULT_RADIUS_KM = 60;
+
 export const SORT_OPTIONS = [
   { id: "newest", label: "Newest first" },
   { id: "oldest", label: "Oldest first" },
-  { id: "best_match", label: "Best match (resume)" },
+  { id: "best_match", label: "Relevance" },
   { id: "company_az", label: "Company (A–Z)" },
 ] as const;
 

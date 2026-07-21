@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Briefcase, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { JobCard } from "@/components/jobs/job-card";
-import { JobsFilterChips } from "@/components/jobs/jobs-filter-chips";
 import { JobsFilterPersistence } from "@/components/jobs/jobs-filter-persistence";
 import { JobsToolbar } from "@/components/jobs/jobs-toolbar";
 import { RefreshJobsButton } from "@/components/jobs/refresh-jobs-button";
@@ -43,7 +42,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
             <Briefcase className="size-7 text-primary" />
-            Jobs
+            J
           </h1>
           <p className="mt-1 text-muted-foreground">
             {total} job{total === 1 ? "" : "s"}
@@ -55,8 +54,6 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
       </div>
 
       <JobsToolbar filters={filters} />
-
-      <JobsFilterChips filters={filters} />
 
       {jobs.length === 0 ? (
         <Card className="border-border/60 border-dashed">

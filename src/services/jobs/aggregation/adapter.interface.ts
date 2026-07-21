@@ -63,3 +63,40 @@ export async function fetchJson<T>(
 
   return (await response.json()) as T;
 }
+
+/** Shared POST+JSON helper for sources whose search endpoint is POST-only (e.g. Jooble). */
+export async function postJson<T>(
+  source: JobSourceId,
+  url: string,
+  body: unknown,
+  headers?: Record<string, string>
+): Promise<T> {
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new JobSourceError(
+      source,
+      `Network error while posting to ${url}: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+
+  if (!response.ok) {
+    throw new JobSourceError(
+      source,
+      `Request failed with status ${response.status} for ${url}`
+    );
+  }
+
+  return (await response.json()) as T;
+}

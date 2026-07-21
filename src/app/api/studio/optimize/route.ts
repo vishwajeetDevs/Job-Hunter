@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     if (!master) {
       return NextResponse.json(
-        { error: "Upload a master resume in Resume Studio first." },
+        { error: "Upload a master resume in RS first." },
         { status: 422 }
       );
     }

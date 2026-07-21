@@ -98,7 +98,7 @@ export function ColdEmailGenerator({ resumes }: ColdEmailGeneratorProps) {
           </span>
           <p className="mt-4 font-medium">No resumes yet</p>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Upload a resume in Resume Studio first — the generator uses your
+            Upload a resume in RS first — the generator uses your
             parsed resume to personalize the email.
           </p>
         </CardContent>

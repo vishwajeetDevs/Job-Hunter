@@ -8,6 +8,9 @@ export const JOB_SOURCES = [
   "ashby",
   "adzuna",
   "jsearch",
+  "careerjet",
+  "jooble",
+  "themuse",
 ] as const;
 
 export type JobSourceId = (typeof JOB_SOURCES)[number];

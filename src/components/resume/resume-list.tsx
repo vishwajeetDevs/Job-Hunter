@@ -40,11 +40,11 @@ export function ResumeList({ resumes, onDelete }: ResumeListProps) {
   if (resumes.length === 0) {
     return (
       <Card className="border-border/60 border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-14 text-center">
-          <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-            <FileText className="size-6" />
+        <CardContent className="flex flex-col items-center justify-center py-10 text-center">
+          <span className="flex size-11 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <FileText className="size-5" />
           </span>
-          <p className="mt-4 font-medium">No resumes uploaded yet</p>
+          <p className="mt-3 font-medium">No resumes uploaded yet</p>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
             Upload a PDF or DOCX resume to get started. Your files are stored
             securely and linked to your account.
@@ -55,42 +55,55 @@ export function ResumeList({ resumes, onDelete }: ResumeListProps) {
   }
 
   return (
-    <Card className="border-border/60">
-      <CardHeader>
-        <CardTitle>Your resumes</CardTitle>
+    <Card className="gap-0 border-border/60 py-0">
+      <CardHeader className="border-b border-border/60 py-4 [.border-b]:pb-4">
+        <CardTitle className="text-base">Your resumes</CardTitle>
         <CardDescription>
-          {resumes.length} file{resumes.length === 1 ? "" : "s"} uploaded
+          Manage, download, or open a parsed view of each file.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <ul className="divide-y divide-border/60">
+      <CardContent className="px-2 py-2">
+        <ul>
           {resumes.map((resume) => (
             <li
               key={resume.id}
-              className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+              className="group flex flex-col gap-3 rounded-md px-3 py-3 transition-colors hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <FileText className="size-5" />
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <FileText className="size-4.5" />
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{resume.originalFileName}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {fileTypeLabel(resume.originalFileName)} · Uploaded{" "}
-                    {formatDate(resume.createdAt)}
-                    {resume.hasParsedData ? " · Parsed" : ""}
+                  <Link
+                    href={`/dashboard/resume-studio/${resume.id}`}
+                    className="block truncate text-sm font-medium hover:underline"
+                  >
+                    {resume.originalFileName}
+                  </Link>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                    <span>{fileTypeLabel(resume.originalFileName)}</span>
+                    <span aria-hidden>·</span>
+                    <span>{formatDate(resume.createdAt)}</span>
+                    {resume.hasParsedData && (
+                      <>
+                        <span aria-hidden>·</span>
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          Parsed
+                        </span>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-                <Button variant="outline" size="sm" asChild>
+              <div className="flex shrink-0 items-center gap-1">
+                <Button variant="ghost" size="sm" asChild>
                   <Link href={`/dashboard/resume-studio/${resume.id}`}>
                     <Eye className="size-4" />
-                    View parsed
+                    View
                   </Link>
                 </Button>
-                <Button variant="outline" size="sm" asChild>
+                <Button variant="ghost" size="sm" asChild>
                   <a
                     href={`${RESUME_DOWNLOAD_API_PATH}/${resume.id}/download`}
                     download={resume.originalFileName}
@@ -101,8 +114,9 @@ export function ResumeList({ resumes, onDelete }: ResumeListProps) {
                 </Button>
                 <Button
                   variant="ghost"
-                  size="sm"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  size="icon-sm"
+                  aria-label={`Delete ${resume.originalFileName}`}
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                   disabled={pending && deletingId === resume.id}
                   onClick={() => {
                     setDeletingId(resume.id);
@@ -120,7 +134,6 @@ export function ResumeList({ resumes, onDelete }: ResumeListProps) {
                   ) : (
                     <Trash2 className="size-4" />
                   )}
-                  Delete
                 </Button>
               </div>
             </li>

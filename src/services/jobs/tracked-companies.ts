@@ -5,8 +5,9 @@ import type { JobIngestionTarget } from "@/services/jobs/job-aggregation.service
  *
  * Two kinds:
  * - Company boards (greenhouse/lever/ashby): public APIs, no keys needed.
- * - Aggregator searches (adzuna/jsearch): India-wide keyword searches;
- *   they need API keys in .env and are skipped silently until set.
+ * - Aggregator searches (adzuna/jsearch/careerjet/jooble/themuse):
+ *   India-wide keyword searches; the keyed ones need API keys in .env
+ *   and are skipped silently until set (The Muse works without a key).
  *
  * A target that 404s or fails is skipped without affecting the others.
  *
@@ -18,20 +19,34 @@ export const TRACKED_COMPANIES: JobIngestionTarget[] = [
   { source: "greenhouse", companyToken: "vercel", companyName: "Vercel" },
   { source: "greenhouse", companyToken: "figma", companyName: "Figma" },
   { source: "greenhouse", companyToken: "gitlab", companyName: "GitLab" },
-  // India-heavy boards
+  // India-heavy boards (tokens verified against the live public APIs)
   { source: "greenhouse", companyToken: "postman", companyName: "Postman" },
   { source: "greenhouse", companyToken: "phonepe", companyName: "PhonePe" },
   { source: "greenhouse", companyToken: "groww", companyName: "Groww" },
   { source: "greenhouse", companyToken: "hackerrank", companyName: "HackerRank" },
+  {
+    source: "greenhouse",
+    companyToken: "razorpaysoftwareprivatelimited",
+    companyName: "Razorpay",
+  },
+  { source: "greenhouse", companyToken: "slice", companyName: "slice" },
+  { source: "greenhouse", companyToken: "druva", companyName: "Druva" },
+  // Global boards with large India engineering centres
+  { source: "greenhouse", companyToken: "mongodb", companyName: "MongoDB" },
+  { source: "greenhouse", companyToken: "databricks", companyName: "Databricks" },
+  { source: "greenhouse", companyToken: "coinbase", companyName: "Coinbase" },
 
   // Lever boards
   { source: "lever", companyToken: "plaid", companyName: "Plaid" },
   { source: "lever", companyToken: "palantir", companyName: "Palantir" },
 
-  // Ashby boards
+  // Ashby boards (tokens verified against the live public API)
   { source: "ashby", companyToken: "openai", companyName: "OpenAI" },
   { source: "ashby", companyToken: "linear", companyName: "Linear" },
   { source: "ashby", companyToken: "ramp", companyName: "Ramp" },
+  { source: "ashby", companyToken: "navi", companyName: "Navi" },
+  { source: "ashby", companyToken: "scaler", companyName: "Scaler" },
+  { source: "ashby", companyToken: "notion", companyName: "Notion" },
 
   // Adzuna India searches (needs ADZUNA_APP_ID + ADZUNA_APP_KEY).
   // ~2 API calls per target per refresh.
@@ -68,5 +83,49 @@ export const TRACKED_COMPANIES: JobIngestionTarget[] = [
     companyToken: "in-ncr-software",
     query: "software engineer",
     location: "Noida",
+  },
+
+  // Careerjet India searches (needs CAREERJET_API_KEY). Locale is en_IN,
+  // so an empty location searches all of India. ~2 API calls per target.
+  {
+    source: "careerjet",
+    companyToken: "in-software",
+    query: "software engineer",
+    location: "",
+  },
+  {
+    source: "careerjet",
+    companyToken: "in-bengaluru-software",
+    query: "software developer",
+    location: "Bengaluru",
+  },
+
+  // Jooble India searches (needs JOOBLE_API_KEY). Broad aggregator.
+  {
+    source: "jooble",
+    companyToken: "in-software",
+    query: "software engineer",
+    location: "India",
+  },
+  {
+    source: "jooble",
+    companyToken: "in-bengaluru-software",
+    query: "software developer",
+    location: "Bengaluru",
+  },
+
+  // The Muse searches (works without a key; THEMUSE_API_KEY optional).
+  // `query` is used as the Muse category; `location` filters to the city.
+  {
+    source: "themuse",
+    companyToken: "in-bengaluru-swe",
+    query: "Software Engineering",
+    location: "Bengaluru, India",
+  },
+  {
+    source: "themuse",
+    companyToken: "in-mumbai-swe",
+    query: "Software Engineering",
+    location: "Mumbai, India",
   },
 ];

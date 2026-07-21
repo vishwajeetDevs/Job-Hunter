@@ -120,10 +120,11 @@ export function FileUpload({ onUploadSuccess, className }: FileUploadProps) {
   const isUploading = uploadState === "uploading";
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("space-y-2", className)}>
       <div
         role="button"
         tabIndex={0}
+        aria-label="Upload a resume"
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
@@ -149,32 +150,37 @@ export function FileUpload({ onUploadSuccess, className }: FileUploadProps) {
         }}
         onClick={() => !isUploading && inputRef.current?.click()}
         className={cn(
-          "flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-colors",
+          "flex cursor-pointer items-center gap-3 rounded-lg border-2 border-dashed px-4 py-3.5 transition-colors sm:gap-4 sm:px-5",
           isDragging
             ? "border-primary bg-primary/5"
             : "border-border/70 bg-muted/20 hover:border-primary/40 hover:bg-muted/40",
           isUploading && "pointer-events-none opacity-80"
         )}
       >
-        <span className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           {isUploading ? (
-            <Loader2 className="size-7 animate-spin" />
+            <Loader2 className="size-5 animate-spin" />
           ) : (
-            <Upload className="size-7" />
+            <Upload className="size-5" />
           )}
         </span>
 
-        <p className="mt-4 text-lg font-semibold">
-          {isUploading ? "Uploading resume..." : "Drop your resume here"}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          PDF or DOCX · Max {RESUME_MAX_FILE_SIZE_LABEL}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold">
+            {isUploading
+              ? "Uploading resume..."
+              : "Drop your resume here, or click to browse"}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            PDF or DOCX · Max {RESUME_MAX_FILE_SIZE_LABEL}
+          </p>
+        </div>
 
         <Button
           type="button"
           variant="outline"
-          className="mt-6 rounded-full"
+          size="sm"
+          className="hidden shrink-0 sm:inline-flex"
           disabled={isUploading}
           onClick={(event) => {
             event.stopPropagation();
@@ -182,7 +188,7 @@ export function FileUpload({ onUploadSuccess, className }: FileUploadProps) {
           }}
         >
           <FileUp className="size-4" />
-          Browse files
+          Browse
         </Button>
 
         <input
@@ -195,25 +201,25 @@ export function FileUpload({ onUploadSuccess, className }: FileUploadProps) {
       </div>
 
       {isUploading && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
+        <div className="space-y-1.5 px-1">
+          <div className="flex items-center justify-between text-xs">
             <span className="truncate text-muted-foreground">
               {selectedFile?.name}
             </span>
             <span className="font-medium">{progress}%</span>
           </div>
-          <Progress value={progress} className="h-2" />
+          <Progress value={progress} className="h-1.5" />
         </div>
       )}
 
       {uploadState === "success" && (
-        <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+        <p className="px-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
           Resume uploaded successfully.
         </p>
       )}
 
       {error && (
-        <p className="text-sm font-medium text-destructive">{error}</p>
+        <p className="px-1 text-xs font-medium text-destructive">{error}</p>
       )}
     </div>
   );

@@ -1,12 +1,12 @@
 import {
   DATE_POSTED_OPTIONS,
+  DEFAULT_RADIUS_KM,
   EMPLOYMENT_TYPES,
   EXPERIENCE_LEVELS,
   SORT_OPTIONS,
   WORK_MODES,
   isDatePosted,
   isEmploymentType,
-  isRadiusKm,
   isSortId,
   isWorkMode,
   labelFor,
@@ -14,7 +14,6 @@ import {
   type DatePostedId,
   type EmploymentTypeId,
   type ExperienceLevelId,
-  type RadiusKm,
   type SortId,
   type WorkModeId,
 } from "@/features/jobs/filter-options";
@@ -25,20 +24,16 @@ import {
  * the URL is the single source of truth (shareable + survives refresh).
  */
 export type JobFilters = {
+  /** Free-text search from the main search bar (title/description). */
   query?: string;
-  company?: string;
-  /** Free-text location match (used when no city radius is active). */
-  location?: string;
-  /** City name from the known-cities dataset. */
+  /** City name from the known-cities dataset; drives radius search. */
   city?: string;
-  radiusKm?: RadiusKm;
+  /** Auto-applied radius (km) around the selected city — not user-set. */
+  radiusKm?: number;
   experienceLevel?: ExperienceLevelId;
   datePosted?: DatePostedId;
   workMode?: WorkModeId;
   employmentType?: EmploymentTypeId;
-  source?: string;
-  /** Minimum annual salary; matches only jobs that expose salary data. */
-  salaryMin?: number;
   sort: SortId;
   page: number;
 };
@@ -57,24 +52,18 @@ export function parseJobFilters(params: RawJobSearchParams): JobFilters {
   const mode = first(params.mode);
   const type = first(params.type);
   const sort = first(params.sort);
-  const radius = Number(first(params.radius));
-  const salaryMin = Number(first(params.salMin));
   const page = Number(first(params.page));
   const city = first(params.city);
 
   return {
     query: first(params.q),
-    company: first(params.company),
-    location: first(params.loc),
     city,
-    // A city without a radius would silently match nothing — default 50 km.
-    radiusKm: isRadiusKm(radius) ? radius : city ? 50 : undefined,
+    // Selecting a location always searches within a fixed radius.
+    radiusKm: city ? DEFAULT_RADIUS_KM : undefined,
     experienceLevel: exp ? normalizeExperienceLevel(exp) : undefined,
     datePosted: posted && isDatePosted(posted) ? posted : undefined,
     workMode: mode && isWorkMode(mode) ? mode : undefined,
     employmentType: type && isEmploymentType(type) ? type : undefined,
-    source: first(params.source),
-    salaryMin: Number.isFinite(salaryMin) && salaryMin > 0 ? salaryMin : undefined,
     sort: sort && isSortId(sort) ? sort : "newest",
     page: Number.isFinite(page) && page > 1 ? Math.floor(page) : 1,
   };
@@ -84,16 +73,11 @@ export function serializeJobFilters(filters: Partial<JobFilters>): string {
   const params = new URLSearchParams();
 
   if (filters.query) params.set("q", filters.query);
-  if (filters.company) params.set("company", filters.company);
-  if (filters.location) params.set("loc", filters.location);
   if (filters.city) params.set("city", filters.city);
-  if (filters.radiusKm) params.set("radius", String(filters.radiusKm));
   if (filters.experienceLevel) params.set("exp", filters.experienceLevel);
   if (filters.datePosted) params.set("posted", filters.datePosted);
   if (filters.workMode) params.set("mode", filters.workMode);
   if (filters.employmentType) params.set("type", filters.employmentType);
-  if (filters.source) params.set("source", filters.source);
-  if (filters.salaryMin) params.set("salMin", String(filters.salaryMin));
   if (filters.sort && filters.sort !== "newest") params.set("sort", filters.sort);
   if (filters.page && filters.page > 1) params.set("page", String(filters.page));
 
@@ -110,25 +94,17 @@ export type FilterChip = {
   label: string;
 };
 
-/** Active filters rendered as removable chips (sort/page excluded). */
+/** Active filters rendered as removable chips (sort/page/query excluded). */
 export function activeFilterChips(filters: JobFilters): FilterChip[] {
   const chips: FilterChip[] = [];
 
-  if (filters.query) chips.push({ key: "query", label: `Keyword: ${filters.query}` });
-  if (filters.company) chips.push({ key: "company", label: `Company: ${filters.company}` });
-  if (filters.location) chips.push({ key: "location", label: `Location: ${filters.location}` });
   if (filters.city) {
-    chips.push({
-      key: "city",
-      label: filters.radiusKm
-        ? `Within ${filters.radiusKm} km of ${filters.city}`
-        : `City: ${filters.city}`,
-    });
+    chips.push({ key: "city", label: filters.city });
   }
   if (filters.experienceLevel) {
     chips.push({
       key: "experienceLevel",
-      label: `Experience: ${labelFor(EXPERIENCE_LEVELS, filters.experienceLevel)}`,
+      label: labelFor(EXPERIENCE_LEVELS, filters.experienceLevel),
     });
   }
   if (filters.datePosted) {
@@ -144,15 +120,6 @@ export function activeFilterChips(filters: JobFilters): FilterChip[] {
     chips.push({
       key: "employmentType",
       label: labelFor(EMPLOYMENT_TYPES, filters.employmentType),
-    });
-  }
-  if (filters.source) {
-    chips.push({ key: "source", label: `Source: ${filters.source}` });
-  }
-  if (filters.salaryMin) {
-    chips.push({
-      key: "salaryMin",
-      label: `Salary ≥ ${filters.salaryMin.toLocaleString()}`,
     });
   }
 
@@ -173,6 +140,7 @@ export function withFilterRemoved(
   return next;
 }
 
+/** True when any non-search filter is active (excludes free-text query). */
 export function hasActiveFilters(filters: JobFilters): boolean {
   return activeFilterChips(filters).length > 0;
 }

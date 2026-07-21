@@ -38,7 +38,7 @@ export default async function ParsedResumePage({ params }: ParsedResumePageProps
             className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="size-4" />
-            Back to Resume Studio
+            Back to RS
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
             <FileText className="size-7 text-primary" />
@@ -53,7 +53,12 @@ export default async function ParsedResumePage({ params }: ParsedResumePageProps
         </div>
       </div>
 
-      <ParsedResumeForm resumeId={resume.id} initialData={parsedData} />
+      {/* Keyed by updatedAt so a re-parse remounts the form with fresh data. */}
+      <ParsedResumeForm
+        key={resume.updatedAt.toISOString()}
+        resumeId={resume.id}
+        initialData={parsedData}
+      />
 
       <MatchAnalyzer resumeId={resume.id} />
     </div>

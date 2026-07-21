@@ -139,7 +139,7 @@ export function ResumeMatchStudio({
           <Button asChild className="mt-4">
             <Link href="/dashboard/resume-studio">
               <FileText className="size-4" />
-              Go to Resume Studio
+              Go to RS
             </Link>
           </Button>
         </CardContent>

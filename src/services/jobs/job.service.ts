@@ -66,8 +66,20 @@ function salaryLabel(job: JobRecord): string | null {
   if (!job.salaryMin && !job.salaryMax) return null;
 
   const currency = job.salaryCurrency ?? "";
-  const format = (value: number) =>
-    value >= 1000 ? `${Math.round(value / 1000)}K` : String(value);
+  const isInr = currency.toUpperCase() === "INR" || currency === "₹";
+
+  // Round to one decimal and drop a trailing ".0".
+  const trim = (value: number) => String(Math.round(value * 10) / 10);
+
+  const format = (value: number) => {
+    if (isInr) {
+      // Indian salaries read naturally in lakh / crore.
+      if (value >= 10000000) return `${trim(value / 10000000)}Cr`;
+      if (value >= 100000) return `${trim(value / 100000)}L`;
+      return value >= 1000 ? `${Math.round(value / 1000)}K` : String(value);
+    }
+    return value >= 1000 ? `${Math.round(value / 1000)}K` : String(value);
+  };
 
   if (job.salaryMin && job.salaryMax) {
     return `${currency} ${format(job.salaryMin)}–${format(job.salaryMax)}`.trim();
@@ -115,20 +127,8 @@ function buildWhere(
       OR: [
         { title: { contains: filters.query, mode: "insensitive" } },
         { description: { contains: filters.query, mode: "insensitive" } },
+        { company: { contains: filters.query, mode: "insensitive" } },
       ],
-    });
-  }
-
-  if (filters.company) {
-    conditions.push({
-      company: { contains: filters.company, mode: "insensitive" },
-    });
-  }
-
-  // Free-text location only applies when radius search is inactive.
-  if (!radiusCity && filters.location) {
-    conditions.push({
-      location: { contains: filters.location, mode: "insensitive" },
     });
   }
 
@@ -151,22 +151,12 @@ function buildWhere(
   }
   if (filters.workMode) conditions.push({ workMode: filters.workMode });
   if (filters.employmentType) conditions.push({ employmentType: filters.employmentType });
-  if (filters.source) conditions.push({ source: filters.source });
 
   if (datePostedDays) {
     conditions.push({
       postedAt: {
         gte: new Date(Date.now() - datePostedDays * 24 * 60 * 60 * 1000),
       },
-    });
-  }
-
-  if (filters.salaryMin) {
-    conditions.push({
-      OR: [
-        { salaryMax: { gte: filters.salaryMin } },
-        { salaryMin: { gte: filters.salaryMin } },
-      ],
     });
   }
 

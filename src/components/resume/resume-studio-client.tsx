@@ -14,14 +14,19 @@ export function ResumeStudioClient({ initialResumes }: ResumeStudioClientProps) 
   const [resumes, setResumes] = useState(initialResumes);
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-          Resume Studio
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          Upload and manage your resumes. PDF and DOCX files up to 10 MB.
-        </p>
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">RS</h1>
+          <p className="mt-1 text-muted-foreground">
+            Upload and manage your resumes.
+          </p>
+        </div>
+        {resumes.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {resumes.length} resume{resumes.length === 1 ? "" : "s"}
+          </p>
+        )}
       </div>
 
       <FileUpload

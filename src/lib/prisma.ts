@@ -29,9 +29,32 @@ function createPrismaClient() {
     connectionString,
     // Keep the app-side pool small — Neon's PgBouncer handles fan-out.
     max: 10,
+    // Neon is a remote region away; opening a connection costs a full
+    // TCP + TLS handshake (hundreds of ms). Keep connections alive and
+    // hold idle ones much longer than the 10s default so navigations
+    // reuse warm connections instead of reconnecting every time.
+    keepAlive: true,
+    idleTimeoutMillis: 10 * 60 * 1000,
   });
 
   const adapter = new PrismaPg(pool);
+
+  // In development, ping periodically so the pool keeps a warm
+  // connection and Neon's autosuspend doesn't cold-start the database
+  // between navigations (which adds seconds to the next query).
+  if (process.env.NODE_ENV === "development") {
+    const globalForKeepAlive = globalThis as unknown as {
+      prismaKeepAlive: NodeJS.Timeout | undefined;
+    };
+    if (!globalForKeepAlive.prismaKeepAlive) {
+      globalForKeepAlive.prismaKeepAlive = setInterval(() => {
+        pool.query("SELECT 1").catch(() => {
+          // Ignore — next real query will reconnect.
+        });
+      }, 4 * 60 * 1000);
+      globalForKeepAlive.prismaKeepAlive.unref();
+    }
+  }
 
   return new PrismaClient({
     adapter,

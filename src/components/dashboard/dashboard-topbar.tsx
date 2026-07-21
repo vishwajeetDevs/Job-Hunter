@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Menu, Search } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useState } from "react";
 
 import { DashboardNav } from "@/components/dashboard/dashboard-nav";
 import { UserProfileDropdown } from "@/components/auth/user-profile-dropdown";
 import { ModeToggle } from "@/components/theme/mode-toggle";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Sheet,
   SheetContent,
@@ -53,16 +52,6 @@ export function DashboardTopbar() {
             </div>
           </SheetContent>
         </Sheet>
-
-        {/* Search box */}
-        <div className="relative flex-1 sm:max-w-md">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search jobs, companies..."
-            className="h-9 rounded-full bg-muted/50 pl-9"
-          />
-        </div>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <ModeToggle />

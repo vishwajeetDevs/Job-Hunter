@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Loader2, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { reparseResume } from "@/features/resume/actions/reparse-resume";
 import { updateParsedResume } from "@/features/resume/actions/update-parsed-resume";
 import type {
   ParsedEducation,
@@ -31,9 +33,28 @@ export function ParsedResumeForm({
   resumeId,
   initialData,
 }: ParsedResumeFormProps) {
+  const router = useRouter();
   const [formData, setFormData] = useState<ParsedResumeData>(initialData);
   const [message, setMessage] = useState<string | null>(null);
+  const [reparsing, setReparsing] = useState(false);
   const { run, pending } = useAsyncAction();
+
+  const handleReparse = () => {
+    setReparsing(true);
+    void run(async () => {
+      try {
+        const result = await reparseResume(resumeId);
+        if (result.success) {
+          setMessage("Resume re-parsed successfully.");
+          router.refresh();
+        } else {
+          setMessage(result.error);
+        }
+      } finally {
+        setReparsing(false);
+      }
+    });
+  };
 
   const updateField = <K extends keyof ParsedResumeData>(
     key: K,
@@ -90,6 +111,23 @@ export function ParsedResumeForm({
       ...current,
       experience: current.experience.map((item, itemIndex) =>
         itemIndex === index ? { ...item, [field]: value } : item
+      ),
+    }));
+    setMessage(null);
+  };
+
+  const updateExperienceTechStack = (index: number, value: string) => {
+    const techStack = value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    setFormData((current) => ({
+      ...current,
+      experience: current.experience.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, techStack: techStack.length > 0 ? techStack : undefined }
+          : item
       ),
     }));
     setMessage(null);
@@ -284,14 +322,34 @@ export function ParsedResumeForm({
                     placeholder="Software Engineer"
                   />
                 </div>
-                <div className="space-y-2 sm:col-span-2">
+                <div className="space-y-2">
                   <Label>Period</Label>
                   <Input
                     value={entry.period ?? ""}
                     onChange={(event) =>
                       updateExperience(index, "period", event.target.value)
                     }
-                    placeholder="2022 - Present"
+                    placeholder="Oct 2024 - Present"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Location</Label>
+                  <Input
+                    value={entry.location ?? ""}
+                    onChange={(event) =>
+                      updateExperience(index, "location", event.target.value)
+                    }
+                    placeholder="Remote / City, Country"
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Tech stack</Label>
+                  <Input
+                    value={(entry.techStack ?? []).join(", ")}
+                    onChange={(event) =>
+                      updateExperienceTechStack(index, event.target.value)
+                    }
+                    placeholder="React, Node.js, PostgreSQL"
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
@@ -328,14 +386,29 @@ export function ParsedResumeForm({
           Parsed by {formData.meta.parserId} v{formData.meta.parserVersion} ·{" "}
           {formData.meta.source} mode
         </p>
-        <Button type="submit" disabled={pending}>
-          {pending ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Save className="size-4" />
-          )}
-          Save changes
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={handleReparse}
+          >
+            {reparsing ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="size-4" />
+            )}
+            Re-parse
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending && !reparsing ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
+            Save changes
+          </Button>
+        </div>
       </div>
 
       {message && (
