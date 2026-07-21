@@ -23,7 +23,7 @@ export type RefreshJobsResult =
       skipped: number;
       failedSources: string[];
     }
-  | { success: false; error: string };
+  | { success: false; error: string; retryAfterSeconds?: number };
 
 export type SaveJobResult =
   | { success: true }

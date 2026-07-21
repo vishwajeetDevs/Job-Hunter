@@ -72,7 +72,10 @@ export class CareerjetAdapter implements JobSourceAdapter {
 
     const referer =
       process.env.CAREERJET_REFERER ?? "https://job-hunter.local/jobs/";
-    const userIp = process.env.CAREERJET_USER_IP ?? "1.1.1.1";
+    // Prefer the real visitor's IP (passed per request); fall back to the
+    // configured IP for local dev / server-triggered runs.
+    const userIp =
+      options.userIp ?? process.env.CAREERJET_USER_IP ?? "1.1.1.1";
     const userAgent =
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36";

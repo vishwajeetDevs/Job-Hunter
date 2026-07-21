@@ -57,6 +57,12 @@ export type JobFetchOptions = {
   query?: string;
   /** Location hint for aggregator sources (e.g. "Noida"). */
   location?: string;
+  /**
+   * Public IP of the end user who triggered this fetch. Careerjet requires
+   * a `user_ip`; on the live site this is the real visitor's IP. Falls back
+   * to CAREERJET_USER_IP when absent (e.g. local dev).
+   */
+  userIp?: string;
 };
 
 /** Strips HTML tags and decodes common entities from job descriptions. */

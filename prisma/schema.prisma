@@ -146,6 +146,21 @@ model Job {
   @@map("jobs")
 }
 
+// Records each job-ingestion run. Used to enforce a refresh cooldown so
+// on-demand refreshes don't exhaust external API quotas. A future cron
+// can log runs here too (triggeredBy = "cron").
+model IngestionRun {
+  id          String   @id @default(cuid())
+  // Clerk user id that triggered it, or "cron" for scheduled runs.
+  triggeredBy String?
+  fetched     Int      @default(0)
+  inserted    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@map("ingestion_runs")
+}
+
 model Application {
   id        String            @id @default(cuid())
   userId    String
