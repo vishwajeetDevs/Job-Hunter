@@ -1,12 +1,38 @@
 import { extensionFromFileName } from "@/lib/resume/validation";
 
-/** Minimal structural typing for the pdf.js document pdf-parse exposes. */
+/** Minimal structural typing for the pdf.js document proxy unpdf exposes. */
 type PdfJsDocument = {
   numPages: number;
   getPage(pageNumber: number): Promise<{
+    getTextContent(): Promise<{
+      items: Array<{ str?: string; hasEOL?: boolean }>;
+    }>;
     getAnnotations(): Promise<Array<{ url?: string }>>;
   }>;
 };
+
+/**
+ * Rebuilds page text from pdf.js text items, preserving line breaks via
+ * the `hasEOL` markers so section headings and bullets stay on their
+ * own lines (critical for downstream section detection).
+ */
+async function extractPdfText(doc: PdfJsDocument): Promise<string> {
+  const pages: string[] = [];
+
+  for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber += 1) {
+    const page = await doc.getPage(pageNumber);
+    const content = await page.getTextContent();
+
+    let pageText = "";
+    for (const item of content.items) {
+      if (typeof item.str === "string") pageText += item.str;
+      if (item.hasEOL) pageText += "\n";
+    }
+    pages.push(pageText);
+  }
+
+  return pages.join("\n\n");
+}
 
 /**
  * PDF hyperlinks usually live in link annotations, not the text layer —
@@ -53,8 +79,15 @@ function mergeLinksIntoText(text: string, urls: string[]): string {
 
 /**
  * Extracts plain text from uploaded resume files.
+ *
+ * PDF extraction uses unpdf (a serverless build of pdf.js with no native
+ * dependencies) so it works both locally and on Vercel — the previous
+ * pdf-parse v2 stack required the @napi-rs/canvas native binary, which
+ * fails to load in serverless functions and silently produced empty
+ * parses in production.
+ *
  * Heavy parsers are loaded dynamically so pages that only list resumes
- * do not pull pdf-parse / mammoth into the server bundle.
+ * do not pull them into the server bundle.
  */
 export async function extractTextFromResume(
   buffer: Buffer,
@@ -63,16 +96,16 @@ export async function extractTextFromResume(
   const extension = extensionFromFileName(fileName);
 
   if (extension === ".pdf") {
-    const { PDFParse } = await import("pdf-parse");
-    const parser = new PDFParse({ data: buffer });
+    const { getDocumentProxy } = await import("unpdf");
+    const doc = (await getDocumentProxy(
+      new Uint8Array(buffer)
+    )) as unknown as PdfJsDocument;
 
     try {
-      const result = await parser.getText();
-      let text = result.text ?? "";
+      let text = await extractPdfText(doc);
 
       try {
-        const doc = (parser as unknown as { doc?: PdfJsDocument }).doc;
-        if (doc && text.trim()) {
+        if (text.trim()) {
           text = mergeLinksIntoText(text, await collectAnnotationUrls(doc));
         }
       } catch {
@@ -81,7 +114,7 @@ export async function extractTextFromResume(
 
       return text;
     } finally {
-      await parser.destroy();
+      await (doc as unknown as { destroy?: () => Promise<void> }).destroy?.();
     }
   }
 
