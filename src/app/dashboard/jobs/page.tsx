@@ -4,7 +4,7 @@ import { Briefcase, Sparkles } from "lucide-react";
 import { JobsFilterPersistence } from "@/components/jobs/jobs-filter-persistence";
 import { JobsInfiniteList } from "@/components/jobs/jobs-infinite-list";
 import { JobsToolbar } from "@/components/jobs/jobs-toolbar";
-import { RefreshJobsButton } from "@/components/jobs/refresh-jobs-button";
+import { NextRefreshCountdown } from "@/components/jobs/next-refresh-countdown";
 import {
   RelevantJobsExplorer,
   type ResumeMatchOption,
@@ -24,6 +24,7 @@ import {
   listJobs,
   listResumeMatchedJobs,
 } from "@/services/jobs/job.service";
+import { getRefreshStatus } from "@/services/jobs/refresh.service";
 import { buildResumeMatchProfile } from "@/services/match/engine";
 import { normalizeParsedResumeData } from "@/services/resumes/parsers/types";
 import { listMasterResumes } from "@/services/studio/studio.service";
@@ -95,7 +96,10 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
   // params from old links are ignored.
   filters.page = 1;
 
-  const { jobs, total } = await listJobs({ userId: user.id, filters });
+  const [{ jobs, total }, refreshStatus] = await Promise.all([
+    listJobs({ userId: user.id, filters }),
+    getRefreshStatus(),
+  ]);
 
   const filtersActive = hasActiveFilters(filters);
   const filterQuery = serializeJobFilters(filters);
@@ -116,7 +120,10 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
             .
           </p>
         </div>
-        <RefreshJobsButton />
+        <NextRefreshCountdown
+          lastRefreshAt={refreshStatus.lastRefreshAt}
+          nextRefreshAt={refreshStatus.nextRefreshAt}
+        />
       </div>
 
       <ViewTabs active="all" />
@@ -135,7 +142,7 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
             <p className="mt-1 max-w-sm text-sm text-muted-foreground">
               {filtersActive
                 ? "Try removing a filter, widening the radius, or clearing all filters."
-                : 'Click "Refresh jobs" to pull the latest openings from tracked company boards.'}
+                : "Jobs are synced automatically from tracked company boards — check back after the next refresh."}
             </p>
           </CardContent>
         </Card>
@@ -163,7 +170,10 @@ async function RelevantJobsView({
   userId: string;
   selectedResumeId?: string;
 }) {
-  const masters = await listMasterResumes(userId);
+  const [masters, refreshStatus] = await Promise.all([
+    listMasterResumes(userId),
+    getRefreshStatus(),
+  ]);
 
   const header = (
     <div className="space-y-6">
@@ -177,7 +187,10 @@ async function RelevantJobsView({
             Personalized recommendations based on your resume.
           </p>
         </div>
-        <RefreshJobsButton />
+        <NextRefreshCountdown
+          lastRefreshAt={refreshStatus.lastRefreshAt}
+          nextRefreshAt={refreshStatus.nextRefreshAt}
+        />
       </div>
 
       <ViewTabs active="relevant" />

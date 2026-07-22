@@ -20,16 +20,6 @@ export type JobListItem = {
   matchPercent?: number | null;
 };
 
-export type RefreshJobsResult =
-  | {
-      success: true;
-      fetched: number;
-      inserted: number;
-      skipped: number;
-      failedSources: string[];
-    }
-  | { success: false; error: string; retryAfterSeconds?: number };
-
 export type SaveJobResult =
   | { success: true }
   | { success: false; error: string };
