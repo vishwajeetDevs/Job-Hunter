@@ -3,7 +3,7 @@ import type { JobFilters } from "@/features/jobs/filters";
 import { DATE_POSTED_OPTIONS } from "@/features/jobs/filter-options";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { isJobSourceId } from "@/services/jobs/aggregation/types";
+import { isJobSourceId, normalizeJobSourceQuery } from "@/services/jobs/aggregation/types";
 import { findCityByName } from "@/services/jobs/enrichment/cities";
 import { enrichExistingJob } from "@/services/jobs/enrichment/enrich-job";
 import { boundingBox, haversineKm } from "@/services/jobs/enrichment/geo";
@@ -139,10 +139,10 @@ function buildWhere(
   const conditions: Prisma.JobWhereInput[] = [];
 
   if (filters.query) {
-    const query = filters.query.trim().toLowerCase();
+    const query = normalizeJobSourceQuery(filters.query);
 
     if (isJobSourceId(query)) {
-      // Query is exactly a board name ("lever", "greenhouse", "ashby"...):
+      // Query is exactly a board name ("lever", "greenhouse", "careerjet"...):
       // show only that board's jobs instead of fuzzy text matching, which
       // would drown them under unrelated hits like "leverage".
       conditions.push({ source: query });
@@ -152,6 +152,7 @@ function buildWhere(
           { title: { contains: filters.query, mode: "insensitive" } },
           { description: { contains: filters.query, mode: "insensitive" } },
           { company: { contains: filters.query, mode: "insensitive" } },
+          { source: { contains: filters.query, mode: "insensitive" } },
         ],
       });
     }

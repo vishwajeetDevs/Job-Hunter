@@ -19,6 +19,25 @@ export function isJobSourceId(value: string): value is JobSourceId {
   return (JOB_SOURCES as readonly string[]).includes(value);
 }
 
+/** Common misspellings / display names → canonical source id for search. */
+const SOURCE_QUERY_ALIASES: Record<string, JobSourceId> = {
+  carrierjet: "careerjet",
+  "career jet": "careerjet",
+  jsearch: "jsearch",
+  "j search": "jsearch",
+  themuse: "themuse",
+  "the muse": "themuse",
+};
+
+/**
+ * Normalizes a search query that might be a job-board name, resolving
+ * common typos (e.g. "carrierjet" → "careerjet") before source filtering.
+ */
+export function normalizeJobSourceQuery(query: string): string {
+  const lower = query.trim().toLowerCase();
+  return SOURCE_QUERY_ALIASES[lower] ?? lower;
+}
+
 /**
  * Common normalized job format shared by all adapters.
  * Maps 1:1 onto the Prisma `Job` model.
