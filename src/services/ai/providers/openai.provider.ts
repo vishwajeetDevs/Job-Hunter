@@ -34,8 +34,12 @@ export class OpenAiCompatibleProvider implements AiProvider {
     const reasoningEffort = process.env.AI_REASONING_EFFORT;
 
     // Reasoning models (gpt-oss, o-series) consume completion tokens while
-    // thinking, so give them headroom above the caller's output budget.
-    const maxTokens = (request.maxTokens ?? 400) + (reasoningEffort ? 1024 : 0);
+    // thinking, BEFORE emitting the JSON answer. Too small a budget truncates
+    // the JSON mid-object, which then fails to parse and silently drops the
+    // caller into a fallback. Give reasoning models generous headroom so the
+    // structured output always fits after the thinking tokens.
+    const reasoningHeadroom = reasoningEffort === "high" ? 4096 : 2560;
+    const maxTokens = (request.maxTokens ?? 400) + (reasoningEffort ? reasoningHeadroom : 0);
 
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
