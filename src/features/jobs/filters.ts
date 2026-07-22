@@ -140,9 +140,9 @@ export function withFilterRemoved(
   return next;
 }
 
-/** True when any non-search filter is active (excludes free-text query). */
+/** True when any filter or search query is active. */
 export function hasActiveFilters(filters: JobFilters): boolean {
-  return activeFilterChips(filters).length > 0;
+  return Boolean(filters.query) || activeFilterChips(filters).length > 0;
 }
 
 export { SORT_OPTIONS };

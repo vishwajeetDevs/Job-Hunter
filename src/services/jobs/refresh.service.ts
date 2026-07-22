@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/prisma";
-import { resolveUserIp } from "@/lib/request-ip";
 import { ingestJobsFromTargets } from "@/services/jobs/job-aggregation.service";
 import { enrichMissingJobs } from "@/services/jobs/job.service";
 import { TRACKED_COMPANIES } from "@/services/jobs/tracked-companies";
@@ -116,17 +115,10 @@ export async function runJobsRefresh(
     select: { id: true },
   });
 
-  // Careerjet requires a public `user_ip`. There is no visitor on a cron,
-  // so resolve the server's own public IP (adapter falls back to
-  // CAREERJET_USER_IP when the lookup fails).
-  const userIp = await resolveUserIp(null);
-  const targets = userIp
-    ? TRACKED_COMPANIES.map((target) => ({ ...target, userIp }))
-    : TRACKED_COMPANIES;
-
   // Every source runs independently — failures are collected per source
   // and never abort the batch (see ingestJobsFromSource).
-  const results = await ingestJobsFromTargets(targets);
+  // Careerjet reads CAREERJET_USER_IP inside its adapter (whitelisted IP).
+  const results = await ingestJobsFromTargets(TRACKED_COMPANIES);
 
   const summary = results.reduce(
     (acc, result) => ({

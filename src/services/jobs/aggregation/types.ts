@@ -19,9 +19,8 @@ export function isJobSourceId(value: string): value is JobSourceId {
   return (JOB_SOURCES as readonly string[]).includes(value);
 }
 
-/** Common misspellings / display names → canonical source id for search. */
+/** Display-name variants → canonical source id for board search. */
 const SOURCE_QUERY_ALIASES: Record<string, JobSourceId> = {
-  carrierjet: "careerjet",
   "career jet": "careerjet",
   jsearch: "jsearch",
   "j search": "jsearch",
@@ -30,8 +29,8 @@ const SOURCE_QUERY_ALIASES: Record<string, JobSourceId> = {
 };
 
 /**
- * Normalizes a search query that might be a job-board name, resolving
- * common typos (e.g. "carrierjet" → "careerjet") before source filtering.
+ * Normalizes a search query that might be a job-board name (e.g. "career jet")
+ * before source filtering.
  */
 export function normalizeJobSourceQuery(query: string): string {
   const lower = query.trim().toLowerCase();
