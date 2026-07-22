@@ -35,7 +35,7 @@ type JobCardProps = {
 
 export function JobCard({ job }: JobCardProps) {
   return (
-    <Card className="group relative border-border/60 transition-colors hover:border-primary/30">
+    <Card className="group relative transition-[box-shadow,ring-color,background-color] duration-300 ease-out hover:bg-card/90 hover:ring-primary/30 hover:shadow-[0_0_0_1px_color-mix(in_oklch,var(--primary)_20%,transparent),0_12px_40px_-16px_color-mix(in_oklch,var(--primary)_18%,transparent)]">
       {/* Stretched link — whole card opens job details; action buttons sit above it. */}
       <Link
         href={`/dashboard/jobs/${job.id}`}
@@ -81,10 +81,10 @@ export function JobCard({ job }: JobCardProps) {
             )}
           </div>
 
-          {job.descriptionSnippet && (
-            <p className="text-sm text-muted-foreground/90">
-              {job.descriptionSnippet}
-            </p>
+          {job.description && (
+            <div className="max-h-52 overflow-y-auto overscroll-contain pr-1 text-sm leading-relaxed text-muted-foreground/90 [scrollbar-color:color-mix(in_oklch,var(--muted-foreground)_35%,transparent)_transparent] [scrollbar-width:thin]">
+              <p className="whitespace-pre-line">{job.description}</p>
+            </div>
           )}
 
           {(job.workMode || job.employmentType || job.experienceLevel || job.salaryLabel) && (

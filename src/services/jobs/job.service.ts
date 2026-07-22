@@ -11,8 +11,6 @@ import { normalizeParsedResumeData } from "@/services/resumes/parsers/types";
 
 export const JOBS_PAGE_SIZE = 20;
 
-const SNIPPET_LENGTH = 180;
-
 /** Cap for in-memory paths (radius refinement / best-match scoring). */
 const IN_MEMORY_CAP = 600;
 
@@ -56,13 +54,6 @@ type JobRecord = {
   longitude: number | null;
 };
 
-function toSnippet(description: string | null): string | null {
-  if (!description) return null;
-  const flattened = description.replace(/\s+/g, " ").trim();
-  if (flattened.length <= SNIPPET_LENGTH) return flattened;
-  return `${flattened.slice(0, SNIPPET_LENGTH).trimEnd()}…`;
-}
-
 function salaryLabel(job: JobRecord): string | null {
   if (!job.salaryMin && !job.salaryMax) return null;
 
@@ -95,7 +86,7 @@ function toListItem(job: JobRecord, savedJobIds: Set<string>): JobListItem {
     title: job.title,
     company: job.company,
     location: job.location,
-    descriptionSnippet: toSnippet(job.description),
+    description: job.description,
     url: job.jobUrl,
     source: job.source,
     postedAt: job.postedAt?.toISOString() ?? null,
