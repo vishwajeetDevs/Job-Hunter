@@ -26,7 +26,7 @@ export const REFRESH_INTERVAL_HOURS = Number(
 const ANCHOR_HOUR_UTC = 3;
 
 /** Jobs unseen for this long are treated as expired and removed. */
-const JOB_MAX_AGE_DAYS = 30;
+const JOB_MAX_AGE_DAYS = 60;
 
 export type RefreshRunSummary = {
   fetched: number;
