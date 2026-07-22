@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/refresh-jobs",
-      "schedule": "0 3 * * *"
+      "schedule": "30 0,6,12,18 * * *"
     }
   ]
 }
