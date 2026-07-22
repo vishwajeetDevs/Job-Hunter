@@ -26,6 +26,11 @@ export async function generateOptimizedResume(input: {
   jobCompany: string;
   jobDescription: string;
   report: MatchReport | null;
+  /**
+   * De-noised, highest-priority JD keywords (skills first) the scorer
+   * measures — the optimizer surfaces these where truthfully supported.
+   */
+  targetKeywords?: string[];
   /** Version number for this generation (1 = first, bumps on regenerate). */
   version: number;
 }): Promise<OptimizedResumeContent> {
@@ -49,9 +54,14 @@ export async function generateOptimizedResume(input: {
       jobTitle: input.jobTitle,
       jobCompany: input.jobCompany,
       jobDescription: input.jobDescription,
-      missingKeywords: input.report?.missingKeywords,
+      // Prefer the deterministic JD keyword targets; fall back to the
+      // analysis report's missing keywords when none were supplied.
+      targetKeywords:
+        input.targetKeywords && input.targetKeywords.length > 0
+          ? input.targetKeywords
+          : input.report?.missingKeywords,
     }),
-    maxTokens: 1900,
+    maxTokens: 2200,
     // Slight creativity produces better rewrites than pure greedy decoding.
     temperature: 0.3,
   });

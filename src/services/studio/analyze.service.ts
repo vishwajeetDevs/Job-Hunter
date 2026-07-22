@@ -1,24 +1,25 @@
+import { readinessFromScore, type MatchReport } from "@/features/studio/types";
 import {
-  normalizeMatchReport,
-  readinessFromScore,
-  type MatchReport,
-} from "@/features/studio/types";
-import { getAiProvider, isAiConfigured } from "@/services/ai";
-import {
-  ANALYZE_SYSTEM_PROMPT,
-  buildAnalyzeUserPrompt,
-} from "@/services/studio/prompts";
+  extractJdKeywords,
+  resumeIncludesTerm,
+  type JdKeyword,
+} from "@/services/studio/jd-keywords";
 import type { ParsedResumeData } from "@/services/resumes/parsers/types";
 
 /**
  * Analyzes a resume against a job description and produces a match report.
  *
- * The AI provider is the primary engine. If it is not configured, errors,
- * or returns unparseable/invalid JSON, we fall back to a deterministic
- * JD-keyword-coverage score computed from the resume TEXT (never from an
- * empty parsed object) — so an optimized resume that genuinely adds the
- * job's keywords always scores higher on re-analysis instead of collapsing
- * to 0%.
+ * Scoring is DETERMINISTIC and evidence-based: it measures how well the
+ * resume covers the posting's important, de-noised keywords (weighted by
+ * importance). The same algorithm runs for the master resume ("before") and
+ * the optimized resume ("after"), so the two scores are directly comparable
+ * and the improvement reflects real, measurable changes to the resume —
+ * never AI guesswork or a hardcoded bump. Adding a genuinely-supported job
+ * keyword always raises coverage, and therefore the score.
+ *
+ * `parsedData` is accepted for API compatibility but intentionally unused:
+ * the score depends only on the resume TEXT, so "before" (which has parsed
+ * data) and "after" (which does not) are scored identically.
  */
 export async function analyzeResumeMatch(input: {
   resumeText: string;
@@ -27,126 +28,45 @@ export async function analyzeResumeMatch(input: {
   jobCompany: string;
   jobDescription: string;
 }): Promise<MatchReport> {
-  if (isAiConfigured()) {
-    try {
-      const provider = getAiProvider();
-      const raw = await provider.completeJson({
-        system: ANALYZE_SYSTEM_PROMPT,
-        user: buildAnalyzeUserPrompt(input),
-        maxTokens: 950,
-      });
-
-      const report = normalizeMatchReport(JSON.parse(raw), "ai");
-      if (report) return report;
-
-      console.error("[analyzeResumeMatch] Model returned invalid JSON shape.");
-    } catch (error) {
-      console.error("[analyzeResumeMatch]", error);
-    }
-  }
-
   return keywordCoverageReport(input);
 }
 
 // ---------------------------------------------------------------------------
-// Deterministic fallback — JD keyword coverage over the resume text.
+// Deterministic scorer — weighted JD keyword coverage over the resume text.
 // ---------------------------------------------------------------------------
 
-/**
- * Multi-word technologies/skills that must be matched as a unit — splitting
- * them into tokens would lose meaning (e.g. "machine learning").
- */
-const KNOWN_PHRASES = [
-  "machine learning", "deep learning", "data science", "computer science",
-  "rest api", "restful api", "web api", "unit testing", "integration testing",
-  "ci/cd", "next.js", "node.js", "react native", "spring boot", "asp.net",
-  "entity framework", "objective c", "objective-c", "power bi", "google cloud",
-  "microsoft azure", "amazon web services", "version control", "design patterns",
-  "test driven development", "object oriented", "message queue", "micro services",
-  "microservices", "distributed systems", "natural language processing",
-  "continuous integration", "continuous deployment", "sql server", "shell scripting",
-];
-
-/**
- * Words that carry no signal for skill/requirement matching. Kept lean —
- * over-filtering removes genuine keywords, under-filtering adds noise.
- */
-const STOPWORDS = new Set([
-  "the", "and", "for", "are", "our", "you", "your", "with", "this", "that",
-  "will", "have", "has", "from", "not", "but", "all", "any", "can", "who",
-  "was", "were", "they", "them", "their", "there", "here", "when", "what",
-  "which", "while", "into", "out", "over", "under", "such", "than", "then",
-  "his", "her", "its", "job", "role", "work", "working", "team", "teams",
-  "company", "companies", "candidate", "candidates", "position", "positions",
-  "responsibilities", "requirements", "required", "qualifications", "preferred",
-  "ability", "able", "strong", "good", "excellent", "years", "year", "experience",
-  "experienced", "including", "include", "includes", "etc", "using", "use", "used",
-  "across", "within", "about", "also", "may", "must", "should", "would", "could",
-  "well", "like", "help", "join", "looking", "seeking", "we", "us", "an", "or",
-  "of", "to", "in", "on", "at", "as", "is", "be", "by", "it", "a", "plus",
-  "environment", "opportunity", "opportunities", "skills", "knowledge", "understanding",
-  "development", "developer", "engineer", "engineering", "software", "applications",
-  "application", "solutions", "solution", "business", "products", "product", "based",
-  "new", "more", "most", "other", "others", "one", "two", "three", "per", "day",
-  "days", "time", "role", "roles", "level", "senior", "junior", "lead", "part",
-  "full", "self", "high", "low", "great", "best", "key", "core", "related", "various",
-]);
-
-/**
- * Extracts the most salient keywords from a job description, preserving a
- * representative original-case form for display.
- */
-function extractJdKeywords(jobDescription: string, max = 26): string[] {
-  const lower = jobDescription.toLowerCase();
-  const counts = new Map<string, number>();
-  const display = new Map<string, string>();
-
-  // Multi-word phrases first so their tokens don't also count as unigrams.
-  for (const phrase of KNOWN_PHRASES) {
-    if (lower.includes(phrase)) {
-      counts.set(phrase, (counts.get(phrase) ?? 0) + 3);
-      display.set(phrase, phrase);
-    }
-  }
-
-  // Original-case token stream (for nicer display casing).
-  const originalTokens = jobDescription.match(/[A-Za-z0-9][A-Za-z0-9+.#/-]*/g) ?? [];
-  for (const original of originalTokens) {
-    const token = original.toLowerCase();
-    if (token.length < 2 || token.length > 30) continue;
-    if (STOPWORDS.has(token)) continue;
-    // Skip pure numbers.
-    if (/^\d+$/.test(token)) continue;
-
-    counts.set(token, (counts.get(token) ?? 0) + 1);
-    if (!display.has(token)) display.set(token, original);
-  }
-
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, max)
-    .map(([keyword]) => display.get(keyword) ?? keyword);
+function joinTop(keywords: JdKeyword[], count: number): string {
+  return keywords
+    .slice(0, count)
+    .map((keyword) => keyword.display)
+    .join(", ");
 }
 
 /**
- * Scores by how many of the job's key terms appear in the resume text.
- * Deterministic and monotonic: adding a genuinely-supported JD keyword to
- * the resume increases coverage → increases the score, so AI optimization
- * that mirrors the posting is always recognized as an improvement.
+ * Maps weighted coverage (0-1) to a 0-100 score. Calibrated so a genuinely
+ * relevant but poorly-aligned resume (~0.25-0.35 coverage) lands in the
+ * 30-45 range, and a resume that surfaces most supported requirements
+ * (~0.65-0.8 coverage) reaches ~70-85 — the real improvement optimization
+ * can deliver, with no artificial flooring of the gap that optimization moves.
  */
+function coverageToScore(coverage: number, floor: number, span: number): number {
+  return Math.max(5, Math.min(98, Math.round(floor + coverage * span)));
+}
+
 function keywordCoverageReport(input: {
   resumeText: string;
   jobDescription: string;
 }): MatchReport {
-  const resume = input.resumeText.toLowerCase();
+  const resumeLower = input.resumeText.toLowerCase();
   const keywords = extractJdKeywords(input.jobDescription);
 
-  if (keywords.length === 0 || !resume.trim()) {
+  // Nothing to measure against — return a neutral, honest baseline.
+  if (keywords.length === 0 || !resumeLower.trim()) {
     return {
-      matchScore: 60,
-      atsScore: 55,
+      matchScore: 55,
+      atsScore: 50,
       scoreExplanation:
-        "Estimated with the offline keyword matcher. Configure an AI provider (AI_API_KEY) for a full, evidence-based analysis.",
+        "Not enough information in the job description to compute a detailed match.",
       matchedSkills: [],
       strengths: [],
       missingSkills: [],
@@ -155,48 +75,94 @@ function keywordCoverageReport(input: {
       experienceAlignment: null,
       educationAlignment: null,
       recommendations: [
-        "Configure an AI provider (AI_API_KEY) for deeper analysis.",
+        "Add the job's key skills and responsibilities to your resume where truthful.",
       ],
-      interviewReadiness: readinessFromScore(60),
+      interviewReadiness: readinessFromScore(55),
       meta: { engine: "keyword", generatedAt: new Date().toISOString() },
     };
   }
 
-  const matched = keywords.filter((keyword) =>
-    resume.includes(keyword.toLowerCase())
-  );
-  const missing = keywords.filter(
-    (keyword) => !resume.includes(keyword.toLowerCase())
-  );
-  const coverage = matched.length / keywords.length;
+  const matched: JdKeyword[] = [];
+  const missing: JdKeyword[] = [];
+  let totalWeight = 0;
+  let matchedWeight = 0;
 
-  // Floors keep a real resume from ever showing a demoralizing 0%, while the
-  // coverage term (the part optimization actually moves) drives the score.
-  const matchScore = Math.round(30 + coverage * 65);
-  const atsScore = Math.round(25 + coverage * 70);
+  for (const keyword of keywords) {
+    totalWeight += keyword.weight;
+    if (resumeIncludesTerm(resumeLower, keyword.term)) {
+      matched.push(keyword);
+      matchedWeight += keyword.weight;
+    } else {
+      missing.push(keyword);
+    }
+  }
 
-  const topMatched = matched.slice(0, 3).join(", ");
-  const topMissing = missing.slice(0, 3).join(", ");
+  // Weighted coverage drives overall fit; literal (per-term) coverage drives
+  // the ATS keyword score. Both are monotonic in "keywords the resume has".
+  const weightedCoverage = totalWeight > 0 ? matchedWeight / totalWeight : 0;
+  const literalCoverage = matched.length / keywords.length;
+
+  const matchScore = coverageToScore(weightedCoverage, 10, 90);
+  const atsScore = coverageToScore(literalCoverage, 8, 90);
+
+  // Rank matched/missing by importance for the qualitative fields.
+  matched.sort((a, b) => b.weight - a.weight);
+  missing.sort((a, b) => b.weight - a.weight);
+
+  const matchedSkills = matched.filter((keyword) => keyword.isSkill);
+  const missingSkills = missing.filter((keyword) => keyword.isSkill);
+
+  const topMatched = joinTop(matchedSkills.length > 0 ? matchedSkills : matched, 3);
+  const topMissing = joinTop(missingSkills.length > 0 ? missingSkills : missing, 3);
+
+  const strengths: string[] = [];
+  if (topMatched) {
+    strengths.push(`Covers ${topMatched} from the posting`);
+  }
+  const secondaryMatched = joinTop(matched.slice(3), 3);
+  if (secondaryMatched) {
+    strengths.push(`Also mentions ${secondaryMatched}`);
+  }
+
+  const gaps: string[] = [];
+  if (topMissing) {
+    gaps.push(`Posting emphasizes ${topMissing}, not found in your resume`);
+  }
+  const secondaryMissing = joinTop(
+    (missingSkills.length > 0 ? missingSkills : missing).slice(3),
+    3
+  );
+  if (secondaryMissing) {
+    gaps.push(`Also missing: ${secondaryMissing}`);
+  }
+
+  const recommendations: string[] = [];
+  if (topMissing) {
+    recommendations.push(
+      `Where truthful, surface ${topMissing} in your summary, skills, and experience.`
+    );
+  }
+  recommendations.push(
+    "Mirror the posting's exact terminology in your summary and bullet points."
+  );
+
+  const coveragePct = Math.round(weightedCoverage * 100);
+  const scoreExplanation = `Your resume reflects ${matched.length} of ${keywords.length} key requirements from this posting (${coveragePct}% weighted coverage).${
+    topMatched ? ` Strong on ${topMatched}.` : ""
+  }${topMissing ? ` Gaps: ${topMissing}.` : ""}`;
 
   return {
     matchScore,
     atsScore,
-    scoreExplanation: `Your resume covers ${matched.length} of ${keywords.length} key terms from this posting${
-      topMissing ? `; gaps include ${topMissing}` : ""
-    }. (Offline keyword estimate — set AI_API_KEY for a deeper analysis.)`,
-    matchedSkills: matched.slice(0, 10),
-    strengths: topMatched ? [`Resume already mentions ${topMatched}`] : [],
-    missingSkills: missing.slice(0, 6),
-    missingKeywords: missing.slice(0, 8),
-    gaps: topMissing ? [`Posting emphasizes ${topMissing}, not found in resume`] : [],
+    scoreExplanation,
+    matchedSkills: matched.slice(0, 10).map((keyword) => keyword.display),
+    strengths,
+    missingSkills: missingSkills.slice(0, 6).map((keyword) => keyword.display),
+    missingKeywords: missing.slice(0, 8).map((keyword) => keyword.display),
+    gaps,
     experienceAlignment: null,
     educationAlignment: null,
-    recommendations: [
-      missing.length > 0
-        ? `Where truthful, surface ${topMissing} in your summary, skills, or experience.`
-        : "Mirror the posting's exact phrasing in your summary and skills.",
-      "Configure an AI provider (AI_API_KEY) for deeper, evidence-based analysis.",
-    ],
+    recommendations,
     interviewReadiness: readinessFromScore(matchScore),
     meta: { engine: "keyword", generatedAt: new Date().toISOString() },
   };

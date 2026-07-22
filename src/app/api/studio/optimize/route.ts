@@ -7,6 +7,7 @@ import {
   normalizeOptimizedResumeContent,
 } from "@/features/studio/types";
 import { analyzeResumeMatch } from "@/services/studio/analyze.service";
+import { topJdKeywordStrings } from "@/services/studio/jd-keywords";
 import {
   generateOptimizedResume,
   OptimizeError,
@@ -81,6 +82,9 @@ export async function POST(request: Request) {
       jobCompany: job.company,
       jobDescription: job.description,
       report,
+      // Steer the rewrite with the exact de-noised keywords the scorer
+      // measures, so truthful alignment translates into a higher score.
+      targetKeywords: topJdKeywordStrings(job.description),
       version: previousVersion + 1,
     });
 

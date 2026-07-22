@@ -1,83 +1,47 @@
 /**
  * Prompt templates for the AI Resume Studio.
  *
+ * Match scoring is deterministic (see analyze.service.ts + jd-keywords.ts),
+ * so the AI is used only for the rewrite. The optimizer is steered by the
+ * SAME de-noised JD keyword model the scorer measures, so genuine, truthful
+ * alignment is always reflected as a higher score.
+ *
  * Token budget strategy:
  * - Resume text and job description are truncated to fixed char budgets.
- * - Output schemas are minified JSON with hard item/word limits.
- * - Analysis and generation are separate calls, each triggered only by
- *   an explicit user action.
+ * - Output schema is minified JSON with hard item/word limits.
  */
 
-const RESUME_CHAR_BUDGET_ANALYZE = 4500;
-const RESUME_CHAR_BUDGET_OPTIMIZE = 6500;
-const JOB_CHAR_BUDGET = 3500;
+const RESUME_CHAR_BUDGET_OPTIMIZE = 7000;
+const JOB_CHAR_BUDGET = 4000;
 
 // ---------------------------------------------------------------------------
-// Step 1 — Match analysis
-// ---------------------------------------------------------------------------
-
-export const ANALYZE_SYSTEM_PROMPT = [
-  "You are an expert resume analyst and ATS specialist.",
-  "Compare the resume against the job and reply with only minified JSON:",
-  '{"matchScore":<0-100>,"atsScore":<0-100>,"scoreExplanation":str,"matchedSkills":[..],"strengths":[..],"missingSkills":[..],"missingKeywords":[..],"gaps":[..],"experienceAlignment":str,"educationAlignment":str,"recommendations":[..],"interviewReadiness":"low"|"moderate"|"high"}.',
-  "matchScore = overall fit with the job requirements. Rubric:",
-  "90-100 = nearly all core requirements clearly evidenced;",
-  "75-89 = most core requirements met, minor gaps;",
-  "50-74 = relevant background but several core requirements missing;",
-  "25-49 = adjacent field, few core requirements met;",
-  "0-24 = different profession entirely.",
-  "Score strictly on evidence present in the resume — give full credit when the resume already covers the job's skills and keywords, and do not deduct for gaps that are not required by this job.",
-  "atsScore = keyword and phrasing coverage versus this job posting; a resume that mirrors the posting's key terms in relevant context should score 85+.",
-  "scoreExplanation = 1-2 sentences (max 40 words) explaining exactly why this score was given, citing concrete evidence and gaps.",
-  "matchedSkills = skills/tools required by the job that the resume clearly evidences (max 8, short terms).",
-  "missingKeywords = exact terms from the job the resume should include (max 8, single words or short phrases).",
-  "gaps = biggest gaps between the resume and this specific role (max 4, under 14 words each).",
-  "experienceAlignment = one sentence on how the candidate's experience level and domain align with what the role requires.",
-  "educationAlignment = one sentence on how the candidate's education fits the role's requirements.",
-  "strengths, missingSkills, recommendations: max 4 items each, under 14 words per item.",
-].join(" ");
-
-export function buildAnalyzeUserPrompt(input: {
-  resumeText: string;
-  jobTitle: string;
-  jobCompany: string;
-  jobDescription: string;
-}): string {
-  return [
-    `JOB: ${input.jobTitle} at ${input.jobCompany}`,
-    input.jobDescription.trim().slice(0, JOB_CHAR_BUDGET),
-    "",
-    "RESUME:",
-    input.resumeText.trim().slice(0, RESUME_CHAR_BUDGET_ANALYZE),
-  ].join("\n");
-}
-
-// ---------------------------------------------------------------------------
-// Step 2 — Optimized resume generation
+// Optimized resume generation
 // ---------------------------------------------------------------------------
 
 export const OPTIMIZE_SYSTEM_PROMPT = [
-  "You are an expert ATS resume writer.",
-  "STEP 1 — Analyze the JOB: silently extract its required skills, ATS keywords, core responsibilities, and qualifications.",
-  "STEP 2 — Rewrite the RESUME so it is laser-aligned with that analysis:",
-  "the summary leads with the candidate's most job-relevant strengths;",
-  "the skills list surfaces every genuinely-held skill the job asks for, ordered by relevance;",
-  "experience and project bullets foreground the responsibilities and technologies the job emphasizes, using the posting's exact terminology where the candidate's background truthfully supports it.",
+  "You are an expert ATS resume writer and career coach.",
+  "Your goal: maximize this resume's alignment with the target job WITHOUT inventing anything.",
+  "STEP 1 — Analyze the JOB deeply: extract its required hard skills, tools, technologies, core responsibilities, qualifications, role terminology, and ATS keywords. The user message lists the highest-priority keywords under TARGET KEYWORDS — treat these as the terms to cover wherever the candidate truthfully supports them.",
+  "STEP 2 — Aggressively rewrite and restructure EVERY relevant section so the resume mirrors that analysis:",
+  "SUMMARY: rewrite into a sharp 2-3 sentence pitch that leads with the candidate's most job-relevant skills and role, using the job's terminology.",
+  "SKILLS: surface every genuinely-held skill the job asks for, promote them to the front, and normalize wording to match the posting's exact terms (e.g. 'JS' → 'JavaScript' if the job says JavaScript). Do not add skills the resume gives no evidence for.",
+  "EXPERIENCE: reorder and rewrite bullets so the responsibilities and technologies the job emphasizes come first; re-frame existing achievements using the job's language and quantify with metrics ALREADY present in the resume.",
+  "PROJECTS: same treatment — foreground projects and details most relevant to the job, using the posting's terminology.",
+  "Coverage target: for each TARGET KEYWORD, if the candidate's real background supports it, make sure it appears naturally in the summary, skills, or a relevant bullet.",
   "STRICT RULES (never break these to raise the score):",
-  "Never invent experience, projects, companies, dates, degrees, certifications, metrics, or skills not present in the resume.",
-  "Only rewrite, reorder, emphasize, and quantify content the resume already contains.",
-  "Weave in job keywords only where the resume genuinely supports them — no keyword stuffing.",
-  "Use strong action verbs and concise ATS-friendly phrasing.",
-  "Preserve the resume's original section structure and entry order where relevance allows — optimize content, not the document's identity.",
+  "Never invent experience, projects, employers, dates, degrees, certifications, metrics, or skills not present in the original resume.",
+  "Only rewrite, reorder, emphasize, normalize wording, and quantify content the resume already contains.",
+  "Never claim a skill the resume shows no evidence for, and never keyword-stuff — every keyword must sit in truthful context.",
+  "Keep every real role, employer, and date; preserve the resume's section identity while optimizing its content and ordering.",
   "Reply with only minified JSON:",
   '{"name":str|null,"headline":str|null,"contact":str|null,"summary":str,"skills":[..],' +
     '"experience":[{"heading":role,"subheading":company,"period":str,"bullets":[..]}],' +
     '"projects":[{"heading":name,"subheading":str|null,"period":str|null,"bullets":[..]}],' +
     '"education":[{"heading":degree,"subheading":institution,"period":str,"bullets":[..]}],' +
     '"changes":[..]}.',
-  "summary: 2-3 sentences targeted at the job. Max 5 bullets per entry, under 24 words per bullet.",
-  "Order skills and experience bullets by relevance to the job.",
-  'changes = concrete improvements you made (max 12, under 14 words each, e.g. "Rewrote summary around backend keywords").',
+  "summary: 2-3 sentences targeted at the job. Max 5 bullets per entry, under 26 words per bullet.",
+  "Order skills and every entry's bullets by relevance to the job.",
+  'changes = concrete improvements you made (max 12, under 16 words each, e.g. "Rewrote summary around data-pipeline and Python keywords").',
 ].join(" ");
 
 export function buildOptimizeUserPrompt(input: {
@@ -85,24 +49,30 @@ export function buildOptimizeUserPrompt(input: {
   jobTitle: string;
   jobCompany: string;
   jobDescription: string;
-  /** Keywords the analysis found missing — hints, never fabrication targets. */
-  missingKeywords?: string[];
+  /**
+   * Highest-priority, de-noised keywords from the posting (skills first).
+   * Hints to surface where truthfully supported — never fabrication targets.
+   */
+  targetKeywords?: string[];
 }): string {
   const lines = [
     `JOB: ${input.jobTitle} at ${input.jobCompany}`,
     input.jobDescription.trim().slice(0, JOB_CHAR_BUDGET),
   ];
 
-  if (input.missingKeywords && input.missingKeywords.length > 0) {
+  if (input.targetKeywords && input.targetKeywords.length > 0) {
     lines.push(
       "",
-      `KEYWORDS TO INCLUDE IF TRUTHFULLY SUPPORTED: ${input.missingKeywords
-        .slice(0, 8)
-        .join(", ")}`
+      "TARGET KEYWORDS (cover each one wherever the resume truthfully supports it; never fabricate):",
+      input.targetKeywords.slice(0, 18).join(", ")
     );
   }
 
-  lines.push("", "RESUME:", input.resumeText.trim().slice(0, RESUME_CHAR_BUDGET_OPTIMIZE));
+  lines.push(
+    "",
+    "RESUME:",
+    input.resumeText.trim().slice(0, RESUME_CHAR_BUDGET_OPTIMIZE)
+  );
 
   return lines.join("\n");
 }

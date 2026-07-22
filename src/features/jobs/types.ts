@@ -13,6 +13,11 @@ export type JobListItem = {
   salaryLabel: string | null;
   /** True when the current user already has this job in their tracker. */
   isSaved: boolean;
+  /**
+   * 0-100 relevance to the selected resume. Present only in the
+   * "Relevant to my resume" view; undefined in the standard listing.
+   */
+  matchPercent?: number | null;
 };
 
 export type RefreshJobsResult =

@@ -7,6 +7,11 @@ import { isJobSourceId } from "@/services/jobs/aggregation/types";
 import { findCityByName } from "@/services/jobs/enrichment/cities";
 import { enrichExistingJob } from "@/services/jobs/enrichment/enrich-job";
 import { boundingBox, haversineKm } from "@/services/jobs/enrichment/geo";
+import {
+  extractResumeKeywords,
+  scoreResumeMatch,
+  type ResumeMatchProfile,
+} from "@/services/jobs/resume-match";
 import { normalizeParsedResumeData } from "@/services/resumes/parsers/types";
 
 export const JOBS_PAGE_SIZE = 20;
@@ -15,6 +20,15 @@ const SNIPPET_LENGTH = 180;
 
 /** Cap for in-memory paths (radius refinement / best-match scoring). */
 const IN_MEMORY_CAP = 600;
+
+/** Candidate pool scored for resume-match ranking (newest first). */
+const RESUME_MATCH_CAP = 800;
+
+/**
+ * Minimum match to surface a job in resume-match mode. Keeps the list to
+ * genuinely relevant roles instead of incidental one-keyword hits.
+ */
+const MIN_RESUME_MATCH_PERCENT = 30;
 
 const jobSelect = {
   id: true,
@@ -299,6 +313,100 @@ export async function listJobs(input: {
     jobs: filtered
       .slice(start, start + JOBS_PAGE_SIZE)
       .map((job) => toListItem(job, savedJobIds)),
+  };
+}
+
+export type ResumeMatchProfileResult = {
+  resumeId: string;
+  fileName: string;
+  profile: ResumeMatchProfile;
+  /** False when the resume has no usable skills to match on. */
+  hasKeywords: boolean;
+};
+
+/**
+ * Loads a master resume and derives its match profile (keywords, role
+ * terms, seniority). Defaults to the newest master when no id is given.
+ */
+export async function getResumeMatchProfile(
+  userId: string,
+  resumeId?: string
+): Promise<ResumeMatchProfileResult | null> {
+  const resume = await prisma.resume.findFirst({
+    where: { userId, type: "MASTER", ...(resumeId ? { id: resumeId } : {}) },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, originalFileName: true, parsedData: true },
+  });
+
+  if (!resume) return null;
+
+  const data = normalizeParsedResumeData(resume.parsedData);
+  const profile: ResumeMatchProfile = data
+    ? extractResumeKeywords(data)
+    : { keywords: [], roleTerms: [], experienceLevel: null };
+
+  return {
+    resumeId: resume.id,
+    fileName: resume.originalFileName,
+    profile,
+    hasKeywords: profile.keywords.length > 0,
+  };
+}
+
+/**
+ * Ranks jobs by relevance to a resume profile and returns one page of
+ * results, each annotated with its match percentage. Scores a bounded
+ * pool of the newest jobs in memory (same strategy as best-match sort),
+ * keeps only genuinely relevant roles, and sorts by match then recency.
+ */
+export async function listResumeMatchedJobs(input: {
+  userId: string;
+  profile: ResumeMatchProfile;
+  page: number;
+}): Promise<{ jobs: JobListItem[]; total: number }> {
+  const page = Math.max(1, input.page);
+
+  if (input.profile.keywords.length === 0) {
+    return { jobs: [], total: 0 };
+  }
+
+  const [candidates, savedApplications] = await Promise.all([
+    prisma.job.findMany({
+      orderBy: [
+        { postedAt: { sort: "desc", nulls: "last" } },
+        { createdAt: "desc" },
+      ],
+      take: RESUME_MATCH_CAP,
+      select: jobSelect,
+    }),
+    prisma.application.findMany({
+      where: { userId: input.userId },
+      select: { jobId: true },
+    }),
+  ]);
+
+  const savedJobIds = new Set(savedApplications.map((app) => app.jobId));
+
+  const ranked = candidates
+    .map((job) => ({
+      job,
+      match: scoreResumeMatch(job, input.profile),
+    }))
+    .filter((entry) => entry.match.matchPercent >= MIN_RESUME_MATCH_PERCENT)
+    .sort(
+      (a, b) =>
+        b.match.matchPercent - a.match.matchPercent ||
+        (b.job.postedAt?.getTime() ?? 0) - (a.job.postedAt?.getTime() ?? 0)
+    );
+
+  const start = (page - 1) * JOBS_PAGE_SIZE;
+
+  return {
+    total: ranked.length,
+    jobs: ranked.slice(start, start + JOBS_PAGE_SIZE).map((entry) => ({
+      ...toListItem(entry.job, savedJobIds),
+      matchPercent: entry.match.matchPercent,
+    })),
   };
 }
 

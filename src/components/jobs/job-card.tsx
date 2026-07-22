@@ -29,6 +29,17 @@ function formatPostedAt(isoDate: string): string {
   }).format(new Date(isoDate));
 }
 
+/** Colour band for the match badge — stronger matches read greener. */
+function matchBadgeClass(percent: number): string {
+  if (percent >= 75) {
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+  }
+  if (percent >= 50) {
+    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400";
+  }
+  return "border-border/60 bg-muted text-muted-foreground";
+}
+
 type JobCardProps = {
   job: JobListItem;
 };
@@ -58,6 +69,14 @@ export function JobCard({ job }: JobCardProps) {
                 )}
               >
                 {job.source}
+              </Badge>
+            )}
+            {typeof job.matchPercent === "number" && (
+              <Badge
+                variant="outline"
+                className={cn("font-medium", matchBadgeClass(job.matchPercent))}
+              >
+                {job.matchPercent}% match
               </Badge>
             )}
           </div>
