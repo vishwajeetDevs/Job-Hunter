@@ -106,33 +106,38 @@ export function JobCard({ job }: JobCardProps) {
             </p>
           )}
 
-          {(job.workMode || job.employmentType || job.experienceLevel || job.salaryLabel) && (
-            <div className="flex flex-wrap items-center gap-1.5">
-              {job.workMode && (
-                <Badge variant="outline" className="text-xs font-normal">
-                  {labelFor(WORK_MODES, job.workMode)}
-                </Badge>
-              )}
-              {job.employmentType && (
-                <Badge variant="outline" className="text-xs font-normal">
-                  {labelFor(EMPLOYMENT_TYPES, job.employmentType)}
-                </Badge>
-              )}
-              {job.experienceLevel && (
-                <Badge variant="outline" className="text-xs font-normal">
-                  {experienceLevelLabel(job.experienceLevel)}
-                </Badge>
-              )}
-              {job.salaryLabel && (
-                <Badge
-                  variant="outline"
-                  className="border-emerald-500/30 text-xs font-normal text-emerald-700 dark:text-emerald-400"
-                >
-                  {job.salaryLabel}
-                </Badge>
-              )}
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {job.workMode && (
+              <Badge variant="outline" className="text-xs font-normal">
+                {labelFor(WORK_MODES, job.workMode)}
+              </Badge>
+            )}
+            {job.employmentType && (
+              <Badge variant="outline" className="text-xs font-normal">
+                {labelFor(EMPLOYMENT_TYPES, job.employmentType)}
+              </Badge>
+            )}
+            {job.experienceLevel && (
+              <Badge variant="outline" className="text-xs font-normal">
+                {experienceLevelLabel(job.experienceLevel)}
+              </Badge>
+            )}
+            {job.salaryLabel ? (
+              <Badge
+                variant="outline"
+                className="border-emerald-500/30 text-xs font-normal text-emerald-700 dark:text-emerald-400"
+              >
+                {job.salaryLabel}
+              </Badge>
+            ) : (
+              <Badge
+                variant="outline"
+                className="border-dashed border-border/60 text-xs font-normal text-muted-foreground"
+              >
+                Package not listed
+              </Badge>
+            )}
+          </div>
         </div>
 
         <div className="pointer-events-auto relative z-20 flex shrink-0 items-center gap-2">
