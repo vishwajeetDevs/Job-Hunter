@@ -51,7 +51,7 @@ export async function generateOptimizedResume(input: {
       jobDescription: input.jobDescription,
       missingKeywords: input.report?.missingKeywords,
     }),
-    maxTokens: 1600,
+    maxTokens: 1900,
     // Slight creativity produces better rewrites than pure greedy decoding.
     temperature: 0.3,
   });

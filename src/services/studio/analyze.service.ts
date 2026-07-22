@@ -32,7 +32,7 @@ export async function analyzeResumeMatch(input: {
       const raw = await provider.completeJson({
         system: ANALYZE_SYSTEM_PROMPT,
         user: buildAnalyzeUserPrompt(input),
-        maxTokens: 550,
+        maxTokens: 950,
       });
 
       const report = normalizeMatchReport(JSON.parse(raw), "ai");
@@ -56,12 +56,22 @@ function keywordFallbackReport(input: {
     input.jobDescription
   );
 
+  const matchedSkills = (input.parsedData?.skills ?? []).filter((skill) =>
+    input.jobDescription.toLowerCase().includes(skill.toLowerCase())
+  );
+
   return {
     matchScore: base.score,
     atsScore: base.score,
+    scoreExplanation:
+      "Estimated from keyword overlap between your resume skills and the job description. Configure an AI provider for a deeper, evidence-based analysis.",
+    matchedSkills: matchedSkills.slice(0, 10),
     strengths: base.strengths,
     missingSkills: base.missingSkills,
     missingKeywords: base.missingSkills,
+    gaps: [],
+    experienceAlignment: null,
+    educationAlignment: null,
     recommendations: base.recommendations,
     interviewReadiness: readinessFromScore(base.score),
     meta: { engine: "keyword", generatedAt: new Date().toISOString() },

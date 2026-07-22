@@ -19,7 +19,7 @@ const JOB_CHAR_BUDGET = 3500;
 export const ANALYZE_SYSTEM_PROMPT = [
   "You are an expert resume analyst and ATS specialist.",
   "Compare the resume against the job and reply with only minified JSON:",
-  '{"matchScore":<0-100>,"atsScore":<0-100>,"strengths":[..],"missingSkills":[..],"missingKeywords":[..],"recommendations":[..],"interviewReadiness":"low"|"moderate"|"high"}.',
+  '{"matchScore":<0-100>,"atsScore":<0-100>,"scoreExplanation":str,"matchedSkills":[..],"strengths":[..],"missingSkills":[..],"missingKeywords":[..],"gaps":[..],"experienceAlignment":str,"educationAlignment":str,"recommendations":[..],"interviewReadiness":"low"|"moderate"|"high"}.',
   "matchScore = overall fit with the job requirements. Rubric:",
   "90-100 = nearly all core requirements clearly evidenced;",
   "75-89 = most core requirements met, minor gaps;",
@@ -28,7 +28,12 @@ export const ANALYZE_SYSTEM_PROMPT = [
   "0-24 = different profession entirely.",
   "Score strictly on evidence present in the resume — give full credit when the resume already covers the job's skills and keywords, and do not deduct for gaps that are not required by this job.",
   "atsScore = keyword and phrasing coverage versus this job posting; a resume that mirrors the posting's key terms in relevant context should score 85+.",
+  "scoreExplanation = 1-2 sentences (max 40 words) explaining exactly why this score was given, citing concrete evidence and gaps.",
+  "matchedSkills = skills/tools required by the job that the resume clearly evidences (max 8, short terms).",
   "missingKeywords = exact terms from the job the resume should include (max 8, single words or short phrases).",
+  "gaps = biggest gaps between the resume and this specific role (max 4, under 14 words each).",
+  "experienceAlignment = one sentence on how the candidate's experience level and domain align with what the role requires.",
+  "educationAlignment = one sentence on how the candidate's education fits the role's requirements.",
   "strengths, missingSkills, recommendations: max 4 items each, under 14 words per item.",
 ].join(" ");
 
@@ -59,13 +64,16 @@ export const OPTIMIZE_SYSTEM_PROMPT = [
   "Only rewrite, reorder, emphasize, and quantify existing content.",
   "Weave in job keywords only where the resume genuinely supports them.",
   "Use strong action verbs and concise ATS-friendly phrasing.",
+  "Preserve the resume's original section structure and entry order where relevance allows — optimize content, not the document's identity.",
   "Reply with only minified JSON:",
   '{"name":str|null,"headline":str|null,"contact":str|null,"summary":str,"skills":[..],' +
     '"experience":[{"heading":role,"subheading":company,"period":str,"bullets":[..]}],' +
     '"projects":[{"heading":name,"subheading":str|null,"period":str|null,"bullets":[..]}],' +
-    '"education":[{"heading":degree,"subheading":institution,"period":str,"bullets":[..]}]}.',
+    '"education":[{"heading":degree,"subheading":institution,"period":str,"bullets":[..]}],' +
+    '"changes":[..]}.',
   "summary: 2-3 sentences targeted at the job. Max 5 bullets per entry, under 24 words per bullet.",
   "Order skills and experience bullets by relevance to the job.",
+  'changes = concrete improvements you made (max 12, under 14 words each, e.g. "Rewrote summary around backend keywords").',
 ].join(" ");
 
 export function buildOptimizeUserPrompt(input: {

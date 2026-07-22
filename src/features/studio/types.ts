@@ -14,9 +14,19 @@ export type MatchReport = {
   matchScore: number;
   /** 0-100 — ATS keyword/formatting compatibility. */
   atsScore: number;
+  /** 1-2 sentences explaining why the resume received this score. */
+  scoreExplanation: string | null;
+  /** Job skills clearly evidenced in the resume. */
+  matchedSkills: string[];
   strengths: string[];
   missingSkills: string[];
   missingKeywords: string[];
+  /** Biggest gaps between the resume and this specific role. */
+  gaps: string[];
+  /** One sentence on how the candidate's experience aligns with the role. */
+  experienceAlignment: string | null;
+  /** One sentence on education fit for the role. */
+  educationAlignment: string | null;
   recommendations: string[];
   interviewReadiness: InterviewReadiness;
   meta: {
@@ -38,6 +48,10 @@ function clampScore(value: unknown): number | null {
   const num = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(num)) return null;
   return Math.min(100, Math.max(0, Math.round(num)));
+}
+
+function toSentence(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 export function readinessFromScore(score: number): InterviewReadiness {
@@ -69,9 +83,14 @@ export function normalizeMatchReport(
   return {
     matchScore,
     atsScore,
+    scoreExplanation: toSentence(data.scoreExplanation),
+    matchedSkills: toStringList(data.matchedSkills, 10),
     strengths: toStringList(data.strengths, 5),
     missingSkills: toStringList(data.missingSkills, 6),
     missingKeywords: toStringList(data.missingKeywords, 8),
+    gaps: toStringList(data.gaps, 5),
+    experienceAlignment: toSentence(data.experienceAlignment),
+    educationAlignment: toSentence(data.educationAlignment),
     recommendations: toStringList(data.recommendations, 5),
     interviewReadiness: readiness,
     meta: { engine, generatedAt: new Date().toISOString() },
@@ -137,6 +156,8 @@ export type OptimizedResumeContent = {
   experience: OptimizedResumeEntry[];
   projects: OptimizedResumeEntry[];
   education: OptimizedResumeEntry[];
+  /** Concrete improvements the AI made, e.g. "Rewrote summary to target the role". */
+  changes: string[];
   meta: {
     generatedAt: string;
     version: number;
@@ -212,6 +233,7 @@ export function normalizeOptimizedResumeContent(
     experience,
     projects: toEntryList(data.projects, 6),
     education,
+    changes: toStringList(data.changes, 15),
     meta: {
       generatedAt: storedGeneratedAt ?? new Date().toISOString(),
       version: storedVersion ?? fallbackVersion,
