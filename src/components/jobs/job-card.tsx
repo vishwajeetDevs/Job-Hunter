@@ -81,10 +81,10 @@ export function JobCard({ job }: JobCardProps) {
             )}
           </div>
 
-          {job.description && (
-            <div className="max-h-52 overflow-y-auto overscroll-contain pr-1 text-sm leading-relaxed text-muted-foreground/90 [scrollbar-color:color-mix(in_oklch,var(--muted-foreground)_35%,transparent)_transparent] [scrollbar-width:thin]">
-              <p className="whitespace-pre-line">{job.description}</p>
-            </div>
+          {job.descriptionSnippet && (
+            <p className="text-sm text-muted-foreground/90">
+              {job.descriptionSnippet}
+            </p>
           )}
 
           {(job.workMode || job.employmentType || job.experienceLevel || job.salaryLabel) && (

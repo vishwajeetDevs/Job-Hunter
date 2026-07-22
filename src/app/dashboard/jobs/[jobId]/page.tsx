@@ -48,6 +48,11 @@ function formatPostedAt(date: Date): string {
   }).format(date);
 }
 
+function looksTruncated(description: string): boolean {
+  const trimmed = description.trimEnd();
+  return trimmed.endsWith("…") || trimmed.endsWith("...");
+}
+
 export default async function JobDetailPage({ params }: JobDetailPageProps) {
   const { jobId } = await params;
   const { userId: clerkUserId } = await requireAuth();
@@ -68,6 +73,9 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
 
   const optimizedContent = normalizeOptimizedResumeContent(optimizedRow?.content, 1);
   const savedAnalysis = normalizeAnalysisSnapshot(optimizedRow?.analysis);
+  const descriptionLooksTruncated = job.description
+    ? looksTruncated(job.description)
+    : false;
 
   return (
     <div className="space-y-6">
@@ -141,47 +149,62 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-        <Card className="flex max-h-[min(80vh,calc(100vh-6rem))] min-h-0 flex-col lg:sticky lg:top-6 lg:self-start">
-          <CardHeader className="shrink-0 pb-3">
-            <CardTitle className="text-base">Job description</CardTitle>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-4 [scrollbar-color:color-mix(in_oklch,var(--muted-foreground)_35%,transparent)_transparent] [scrollbar-width:thin]">
-            {job.description ? (
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Job description</CardTitle>
+        </CardHeader>
+        <CardContent className="pb-4">
+          {job.description ? (
+            <>
               <div className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
                 {job.description}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                No description available for this job — open the original
-                posting instead.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+              {descriptionLooksTruncated && job.jobUrl && (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  This listing only includes a preview from{" "}
+                  {job.source ?? "the job board"}.{" "}
+                  <a
+                    href={job.jobUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    View the original posting
+                  </a>{" "}
+                  for the complete job description.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No description available for this job — open the original posting
+              instead.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-        <ResumeMatchStudio
-          jobId={job.id}
-          masters={masters.map((master) => ({
-            id: master.id,
-            fileName: master.originalFileName,
-            rawText: master.rawText,
-            uploadedAt: master.createdAt.toISOString(),
-          }))}
-          initialReport={savedAnalysis.original}
-          initialOptimized={
-            optimizedRow && optimizedContent
-              ? {
-                  resumeId: optimizedRow.id,
-                  parentResumeId: optimizedRow.parentResumeId,
-                  content: optimizedContent,
-                  report: savedAnalysis.optimized,
-                }
-              : null
-          }
-          applicationStatus={application?.status ?? null}
-        />
-      </div>
+      <ResumeMatchStudio
+        jobId={job.id}
+        masters={masters.map((master) => ({
+          id: master.id,
+          fileName: master.originalFileName,
+          rawText: master.rawText,
+          uploadedAt: master.createdAt.toISOString(),
+        }))}
+        initialReport={savedAnalysis.original}
+        initialOptimized={
+          optimizedRow && optimizedContent
+            ? {
+                resumeId: optimizedRow.id,
+                parentResumeId: optimizedRow.parentResumeId,
+                content: optimizedContent,
+                report: savedAnalysis.optimized,
+              }
+            : null
+        }
+        applicationStatus={application?.status ?? null}
+      />
     </div>
   );
 }

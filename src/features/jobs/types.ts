@@ -3,7 +3,7 @@ export type JobListItem = {
   title: string;
   company: string;
   location: string | null;
-  description: string | null;
+  descriptionSnippet: string | null;
   url: string | null;
   source: string | null;
   postedAt: string | null;
