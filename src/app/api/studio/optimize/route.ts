@@ -6,8 +6,9 @@ import {
   normalizeMatchReport,
   normalizeOptimizedResumeContent,
 } from "@/features/studio/types";
-import { analyzeResumeMatch } from "@/services/studio/analyze.service";
-import { topJdKeywordStrings } from "@/services/studio/jd-keywords";
+import { normalizeParsedResumeData } from "@/features/resume/types";
+import { topJobKeywordStrings } from "@/services/match/engine";
+import { buildMatchReport } from "@/services/studio/analyze.service";
 import {
   generateOptimizedResume,
   OptimizeError,
@@ -72,7 +73,21 @@ export async function POST(request: Request) {
 
     const resumeText = await ensureResumeRawText(master);
     // The report is untrusted client input — re-validate it before persisting.
-    const report = body?.report ? normalizeMatchReport(body.report, "ai") : null;
+    const clientReport = body?.report
+      ? normalizeMatchReport(body.report, "ai")
+      : null;
+
+    // The "before" score always comes from the centralized engine (never
+    // trust a possibly-stale client value for the comparison baseline).
+    const report = buildMatchReport({
+      resumeText,
+      parsedData: normalizeParsedResumeData(master.parsedData),
+      jobTitle: job.title,
+      jobCompany: job.company,
+      jobDescription: job.description,
+      jobExperienceLevel: job.experienceLevel,
+    });
+
     const previousVersion =
       normalizeOptimizedResumeContent(existing?.content, 0)?.meta.version ?? 0;
 
@@ -81,22 +96,24 @@ export async function POST(request: Request) {
       jobTitle: job.title,
       jobCompany: job.company,
       jobDescription: job.description,
-      report,
-      // Steer the rewrite with the exact de-noised keywords the scorer
-      // measures, so truthful alignment translates into a higher score.
-      targetKeywords: topJdKeywordStrings(job.description),
+      report: clientReport ?? report,
+      // Steer the rewrite with the exact de-noised keywords the engine
+      // scores, so truthful alignment translates into a higher score.
+      targetKeywords: topJobKeywordStrings(job),
       version: previousVersion + 1,
     });
 
-    // Re-score the generated resume so the user sees the real
-    // before/after improvement instead of the master's old score.
-    const optimizedReport = await analyzeResumeMatch({
+    // Re-score the generated resume with the SAME engine so before/after
+    // are directly comparable — improvement reflects real content changes.
+    const optimizedReport = buildMatchReport({
       resumeText: optimizedContentToText(content),
       parsedData: null,
+      extraKeywords: content.skills,
       jobTitle: job.title,
       jobCompany: job.company,
       jobDescription: job.description,
-    }).catch(() => null);
+      jobExperienceLevel: job.experienceLevel,
+    });
 
     const saved = await saveOptimizedResume({
       userId: user.id,

@@ -1,9 +1,9 @@
 /**
  * Prompt templates for the AI Resume Studio.
  *
- * Match scoring is deterministic (see analyze.service.ts + jd-keywords.ts),
+ * Match scoring is deterministic and centralized (services/match/engine.ts),
  * so the AI is used only for the rewrite. The optimizer is steered by the
- * SAME de-noised JD keyword model the scorer measures, so genuine, truthful
+ * SAME de-noised JD keyword model the engine scores, so genuine, truthful
  * alignment is always reflected as a higher score.
  *
  * Token budget strategy:

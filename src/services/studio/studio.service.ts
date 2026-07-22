@@ -187,7 +187,13 @@ export async function getOptimizedResumeWithJob(userId: string, resumeId: string
       content: true,
       analysis: true,
       job: {
-        select: { id: true, title: true, company: true, description: true },
+        select: {
+          id: true,
+          title: true,
+          company: true,
+          description: true,
+          experienceLevel: true,
+        },
       },
     },
   });

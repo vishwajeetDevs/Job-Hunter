@@ -8,11 +8,12 @@ import { findCityByName } from "@/services/jobs/enrichment/cities";
 import { enrichExistingJob } from "@/services/jobs/enrichment/enrich-job";
 import { boundingBox, haversineKm } from "@/services/jobs/enrichment/geo";
 import {
-  extractResumeKeywords,
-  scoreResumeMatch,
+  buildResumeMatchProfile,
+  createJobMatcher,
   type ResumeMatchProfile,
-} from "@/services/jobs/resume-match";
+} from "@/services/match/engine";
 import { normalizeParsedResumeData } from "@/services/resumes/parsers/types";
+import { ensureResumeRawText } from "@/services/studio/studio.service";
 
 export const JOBS_PAGE_SIZE = 20;
 
@@ -325,8 +326,10 @@ export type ResumeMatchProfileResult = {
 };
 
 /**
- * Loads a master resume and derives its match profile (keywords, role
- * terms, seniority). Defaults to the newest master when no id is given.
+ * Loads a master resume and derives its match profile via the centralized
+ * Match Score Engine — the SAME inputs (parsed data + raw text) the job
+ * detail analysis uses, so both surfaces produce identical scores.
+ * Defaults to the newest master when no id is given.
  */
 export async function getResumeMatchProfile(
   userId: string,
@@ -335,15 +338,22 @@ export async function getResumeMatchProfile(
   const resume = await prisma.resume.findFirst({
     where: { userId, type: "MASTER", ...(resumeId ? { id: resumeId } : {}) },
     orderBy: { createdAt: "desc" },
-    select: { id: true, originalFileName: true, parsedData: true },
+    select: {
+      id: true,
+      originalFileName: true,
+      originalFileUrl: true,
+      parsedData: true,
+      rawText: true,
+    },
   });
 
   if (!resume) return null;
 
-  const data = normalizeParsedResumeData(resume.parsedData);
-  const profile: ResumeMatchProfile = data
-    ? extractResumeKeywords(data)
-    : { keywords: [], roleTerms: [], experienceLevel: null };
+  const resumeText = await ensureResumeRawText(resume);
+  const profile = buildResumeMatchProfile({
+    parsedData: normalizeParsedResumeData(resume.parsedData),
+    resumeText,
+  });
 
   return {
     resumeId: resume.id,
@@ -355,9 +365,10 @@ export async function getResumeMatchProfile(
 
 /**
  * Ranks jobs by relevance to a resume profile and returns one page of
- * results, each annotated with its match percentage. Scores a bounded
- * pool of the newest jobs in memory (same strategy as best-match sort),
- * keeps only genuinely relevant roles, and sorts by match then recency.
+ * results, each annotated with its match percentage from the centralized
+ * Match Score Engine — the same number the job detail analysis shows.
+ * Scores a bounded pool of the newest jobs in memory, keeps only genuinely
+ * relevant roles, and sorts by match then recency.
  */
 export async function listResumeMatchedJobs(input: {
   userId: string;
@@ -386,16 +397,14 @@ export async function listResumeMatchedJobs(input: {
   ]);
 
   const savedJobIds = new Set(savedApplications.map((app) => app.jobId));
+  const matcher = createJobMatcher(input.profile);
 
   const ranked = candidates
-    .map((job) => ({
-      job,
-      match: scoreResumeMatch(job, input.profile),
-    }))
-    .filter((entry) => entry.match.matchPercent >= MIN_RESUME_MATCH_PERCENT)
+    .map((job) => ({ job, match: matcher.score(job) }))
+    .filter((entry) => entry.match.matchScore >= MIN_RESUME_MATCH_PERCENT)
     .sort(
       (a, b) =>
-        b.match.matchPercent - a.match.matchPercent ||
+        b.match.matchScore - a.match.matchScore ||
         (b.job.postedAt?.getTime() ?? 0) - (a.job.postedAt?.getTime() ?? 0)
     );
 
@@ -405,7 +414,7 @@ export async function listResumeMatchedJobs(input: {
     total: ranked.length,
     jobs: ranked.slice(start, start + JOBS_PAGE_SIZE).map((entry) => ({
       ...toListItem(entry.job, savedJobIds),
-      matchPercent: entry.match.matchPercent,
+      matchPercent: entry.match.matchScore,
     })),
   };
 }

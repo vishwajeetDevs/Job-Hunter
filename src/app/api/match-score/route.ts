@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 
 import { normalizeParsedResumeData } from "@/features/resume/types";
 import { computeMatchScore } from "@/services/match/match-score.service";
-import { getResumeForUser } from "@/services/resumes/resume.service";
+import { getResumeWithTextForUser } from "@/services/resumes/resume.service";
+import { ensureResumeRawText } from "@/services/studio/studio.service";
 import { ensureDbUser } from "@/services/users/ensure-user";
 
 export const runtime = "nodejs";
@@ -41,22 +42,23 @@ export async function POST(request: Request) {
     }
 
     const user = await ensureDbUser(clerkUserId);
-    const resume = await getResumeForUser(resumeId, user.id);
+    const resume = await getResumeWithTextForUser(resumeId, user.id);
 
     if (!resume) {
       return NextResponse.json({ error: "Resume not found." }, { status: 404 });
     }
 
     const parsedData = normalizeParsedResumeData(resume.parsedData);
+    const resumeText = await ensureResumeRawText(resume);
 
-    if (!parsedData) {
+    if (!parsedData && !resumeText.trim()) {
       return NextResponse.json(
         { error: "Resume has no parsed data yet. Re-upload or edit it first." },
         { status: 422 }
       );
     }
 
-    const result = await computeMatchScore(parsedData, jobDescription);
+    const result = computeMatchScore({ parsedData, resumeText, jobDescription });
 
     return NextResponse.json({ success: true, result });
   } catch (error) {

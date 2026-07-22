@@ -24,7 +24,7 @@ import {
   listJobs,
   listResumeMatchedJobs,
 } from "@/services/jobs/job.service";
-import { extractResumeKeywords } from "@/services/jobs/resume-match";
+import { buildResumeMatchProfile } from "@/services/match/engine";
 import { normalizeParsedResumeData } from "@/services/resumes/parsers/types";
 import { listMasterResumes } from "@/services/studio/studio.service";
 import { ensureDbUser } from "@/services/users/ensure-user";
@@ -207,15 +207,17 @@ async function RelevantJobsView({
     );
   }
 
-  const resumeOptions: ResumeMatchOption[] = masters.map((master) => {
-    const data = normalizeParsedResumeData(master.parsedData);
-    return {
-      id: master.id,
-      fileName: master.originalFileName,
-      uploadedAt: master.createdAt.toISOString(),
-      keywords: data ? extractResumeKeywords(data).keywords : [],
-    };
-  });
+  // Default keywords per resume come from the centralized Match Score
+  // Engine — the same extraction the job detail analysis uses.
+  const resumeOptions: ResumeMatchOption[] = masters.map((master) => ({
+    id: master.id,
+    fileName: master.originalFileName,
+    uploadedAt: master.createdAt.toISOString(),
+    keywords: buildResumeMatchProfile({
+      parsedData: normalizeParsedResumeData(master.parsedData),
+      resumeText: master.rawText ?? "",
+    }).keywords,
+  }));
 
   const selected =
     resumeOptions.find((option) => option.id === selectedResumeId) ??

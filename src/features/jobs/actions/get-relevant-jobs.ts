@@ -7,7 +7,7 @@ import {
   getResumeMatchProfile,
   listResumeMatchedJobs,
 } from "@/services/jobs/job.service";
-import { sanitizeKeywords } from "@/services/jobs/resume-match";
+import { sanitizeKeywords } from "@/services/match/engine";
 import { ensureDbUser } from "@/services/users/ensure-user";
 
 export type GetRelevantJobsResult =

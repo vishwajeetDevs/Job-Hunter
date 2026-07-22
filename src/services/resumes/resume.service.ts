@@ -112,6 +112,23 @@ export async function getResumeForUser(resumeId: string, userId: string) {
   });
 }
 
+/**
+ * Resume with its raw text — for match scoring, which needs the full text
+ * evidence. Separate from `resumeSelect` so list views stay lightweight.
+ */
+export async function getResumeWithTextForUser(resumeId: string, userId: string) {
+  return prisma.resume.findFirst({
+    where: { id: resumeId, userId },
+    select: {
+      id: true,
+      originalFileName: true,
+      originalFileUrl: true,
+      parsedData: true,
+      rawText: true,
+    },
+  });
+}
+
 export type ResumeRecord = Awaited<ReturnType<typeof getResumeForUser>>;
 
 export type ResumeWithParsedData = NonNullable<ResumeRecord> & {

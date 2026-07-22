@@ -10,12 +10,13 @@ import {
   experienceLevelLabel,
   labelFor,
 } from "@/features/jobs/filter-options";
-import {
-  normalizeAnalysisSnapshot,
-  normalizeOptimizedResumeContent,
-} from "@/features/studio/types";
+import { normalizeParsedResumeData } from "@/features/resume/types";
+import { optimizedContentToText } from "@/features/studio/serialize";
+import { normalizeOptimizedResumeContent } from "@/features/studio/types";
 import { requireAuth } from "@/lib/auth/require-auth";
+import { buildMatchReport } from "@/services/studio/analyze.service";
 import {
+  ensureResumeRawText,
   getApplicationForJob,
   getJobForStudio,
   getOptimizedResumeForJob,
@@ -59,10 +60,41 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
   ]);
 
   const optimizedContent = normalizeOptimizedResumeContent(optimizedRow?.content, 1);
-  const savedAnalysis = normalizeAnalysisSnapshot(optimizedRow?.analysis);
   const descriptionLooksTruncated = job.description
     ? looksTruncated(job.description)
     : false;
+
+  // Recompute before/after reports with the centralized Match Score Engine
+  // on every load (deterministic + cheap) instead of trusting stored
+  // snapshots — the score here always equals the job-card match %.
+  const parentMaster = optimizedRow
+    ? masters.find((master) => master.id === optimizedRow.parentResumeId) ?? null
+    : null;
+
+  const originalReport =
+    parentMaster && job.description?.trim()
+      ? buildMatchReport({
+          resumeText: await ensureResumeRawText(parentMaster),
+          parsedData: normalizeParsedResumeData(parentMaster.parsedData),
+          jobTitle: job.title,
+          jobCompany: job.company,
+          jobDescription: job.description,
+          jobExperienceLevel: job.experienceLevel,
+        })
+      : null;
+
+  const optimizedReport =
+    optimizedContent && job.description?.trim()
+      ? buildMatchReport({
+          resumeText: optimizedContentToText(optimizedContent),
+          parsedData: null,
+          extraKeywords: optimizedContent.skills,
+          jobTitle: job.title,
+          jobCompany: job.company,
+          jobDescription: job.description,
+          jobExperienceLevel: job.experienceLevel,
+        })
+      : null;
 
   const header = (
     <>
@@ -138,14 +170,14 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
           rawText: master.rawText,
           uploadedAt: master.createdAt.toISOString(),
         }))}
-        initialReport={savedAnalysis.original}
+        initialReport={originalReport}
         initialOptimized={
           optimizedRow && optimizedContent
             ? {
                 resumeId: optimizedRow.id,
                 parentResumeId: optimizedRow.parentResumeId,
                 content: optimizedContent,
-                report: savedAnalysis.optimized,
+                report: optimizedReport,
               }
             : null
         }

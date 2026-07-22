@@ -72,6 +72,7 @@ export async function POST(request: Request) {
       jobTitle: job.title,
       jobCompany: job.company,
       jobDescription: job.description,
+      jobExperienceLevel: job.experienceLevel,
     });
 
     return NextResponse.json({ success: true, report });

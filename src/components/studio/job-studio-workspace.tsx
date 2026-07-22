@@ -105,8 +105,10 @@ function formatUploadedAt(isoDate: string): string {
 // Analysis cache — one AI call per job+resume combination per session.
 // ---------------------------------------------------------------------------
 
+// v2: bumped when the scoring engine changes so stale session reports
+// (computed with older logic) are never shown next to fresh scores.
 function analysisCacheKey(jobId: string, resumeId: string): string {
-  return `hyrely:studio:analysis:${jobId}:${resumeId}`;
+  return `hyrely:studio:analysis:v2:${jobId}:${resumeId}`;
 }
 
 function readCachedReport(jobId: string, resumeId: string): MatchReport | null {

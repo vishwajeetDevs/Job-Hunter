@@ -103,9 +103,12 @@ export async function rescoreOptimizedResume(
     const report = await analyzeResumeMatch({
       resumeText: optimizedContentToText(content),
       parsedData: null,
+      // The skills list is structured content the text-scan might miss.
+      extraKeywords: content.skills,
       jobTitle: resume.job.title,
       jobCompany: resume.job.company,
       jobDescription: resume.job.description,
+      jobExperienceLevel: resume.job.experienceLevel,
     });
 
     const analysis = normalizeAnalysisSnapshot(resume.analysis);
