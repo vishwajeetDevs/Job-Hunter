@@ -98,6 +98,9 @@ export function JobCard({ job }: JobCardProps) {
                 {formatPostedAt(job.postedAt)}
               </span>
             )}
+            <span className="font-mono text-xs font-medium text-foreground">
+              ID {job.jobCode}
+            </span>
           </div>
 
           {job.descriptionSnippet && (

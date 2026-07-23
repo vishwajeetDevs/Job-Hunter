@@ -101,6 +101,8 @@ model Resume {
 
 model Job {
   id          String    @id @default(cuid())
+  // Permanent, shareable Job ID shown to users and searchable from the jobs page.
+  jobCode     String    @unique @default(dbgenerated("next_job_code()"))
   externalId  String?
   title       String
   company     String
@@ -134,6 +136,7 @@ model Job {
 
   // Prevent duplicate imports of the same job from the same source.
   @@unique([source, externalId])
+  @@index([jobCode])
   @@index([title])
   @@index([company])
   @@index([location])

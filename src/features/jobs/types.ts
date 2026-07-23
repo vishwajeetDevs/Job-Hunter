@@ -1,5 +1,6 @@
 export type JobListItem = {
   id: string;
+  jobCode: string;
   title: string;
   company: string;
   location: string | null;

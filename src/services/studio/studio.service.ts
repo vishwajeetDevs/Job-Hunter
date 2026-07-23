@@ -83,6 +83,7 @@ export async function getJobForStudio(jobId: string) {
     where: { id: jobId },
     select: {
       id: true,
+      jobCode: true,
       title: true,
       company: true,
       location: true,

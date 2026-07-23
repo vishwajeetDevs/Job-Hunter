@@ -145,6 +145,9 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
             {experienceLevelLabel(job.experienceLevel)}
           </Badge>
         )}
+        <Badge variant="outline" className="font-mono">
+          ID {job.jobCode}
+        </Badge>
         {application && (
           <Badge variant="secondary" className="capitalize">
             In tracker: {application.status.toLowerCase()}

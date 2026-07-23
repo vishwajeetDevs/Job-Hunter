@@ -33,6 +33,7 @@ const MIN_RESUME_MATCH_PERCENT = 30;
 
 const jobSelect = {
   id: true,
+  jobCode: true,
   title: true,
   company: true,
   location: true,
@@ -53,6 +54,7 @@ const jobSelect = {
 
 type JobRecord = {
   id: string;
+  jobCode: string;
   title: string;
   company: string;
   location: string | null;
@@ -116,6 +118,7 @@ function salaryLabel(job: JobRecord): string | null {
 function toListItem(job: JobRecord, savedJobIds: Set<string>): JobListItem {
   return {
     id: job.id,
+    jobCode: job.jobCode,
     title: job.title,
     company: job.company,
     location: job.location,
@@ -159,6 +162,7 @@ function buildWhere(
       conditions.push({
         OR: [
           { title: { contains: filters.query, mode: "insensitive" } },
+          { jobCode: { contains: filters.query, mode: "insensitive" } },
           { description: { contains: filters.query, mode: "insensitive" } },
           { company: { contains: filters.query, mode: "insensitive" } },
           { source: { contains: filters.query, mode: "insensitive" } },

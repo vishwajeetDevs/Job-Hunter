@@ -10,6 +10,7 @@ import { enrichNormalizedJob } from "@/services/jobs/enrichment/enrich-job";
 
 /** Compact record of a job stored during a run, kept in the cron log. */
 export type InsertedJobSummary = {
+  jobCode: string;
   source: string;
   title: string;
   company: string;
@@ -96,6 +97,7 @@ export async function upsertNormalizedJobs(
       };
     }),
     select: {
+      jobCode: true,
       source: true,
       title: true,
       company: true,
@@ -111,6 +113,7 @@ export async function upsertNormalizedJobs(
   const updated = skipped > 0 ? await refreshTruncatedDescriptions(jobs) : 0;
 
   const insertedJobs: InsertedJobSummary[] = created.map((job) => ({
+    jobCode: job.jobCode,
     source: job.source ?? "unknown",
     title: job.title,
     company: job.company,
