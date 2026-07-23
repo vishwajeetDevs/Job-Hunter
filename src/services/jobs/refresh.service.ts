@@ -14,16 +14,17 @@ import { TRACKED_COMPANIES } from "@/services/jobs/tracked-companies";
 
 /**
  * How often the cron fires. MUST match vercel.json's schedule:
- * - 6  (four times a day): "30 0,6,12,18 * * *" = 6 AM/12 PM/6 PM/12 AM IST
- * - 24 (daily, Hobby plan): "30 18 * * *" = 12 AM IST
+ * - 24 (daily, Hobby plan max): "30 18 * * *" = 12 AM IST
+ * - 6  (four times a day, needs Pro): "30 0,6,12,18 * * *"
+ *   = 6 AM/12 PM/6 PM/12 AM IST
  * Override with JOBS_REFRESH_INTERVAL_HOURS when changing vercel.json.
  */
 export const REFRESH_INTERVAL_HOURS = Number(
-  process.env.JOBS_REFRESH_INTERVAL_HOURS ?? 6
+  process.env.JOBS_REFRESH_INTERVAL_HOURS ?? 24
 );
 
-/** UTC time of the first daily run — "30 0" = 00:30 UTC = 6:00 AM IST. */
-const ANCHOR_HOUR_UTC = 0;
+/** UTC time of the (first) daily run — "30 18" = 18:30 UTC = 12:00 AM IST. */
+const ANCHOR_HOUR_UTC = 18;
 const ANCHOR_MINUTE_UTC = 30;
 
 /** Jobs unseen for this long are treated as expired and removed. */
