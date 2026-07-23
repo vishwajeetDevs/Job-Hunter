@@ -7,6 +7,12 @@ import { JobCard } from "@/components/jobs/job-card";
 import { loadMoreJobs } from "@/features/jobs/actions/load-more-jobs";
 import type { JobListItem } from "@/features/jobs/types";
 
+/**
+ * sessionStorage key prefix for per-filter-query browsing state.
+ * Stores { jobs, page, scrollY } so "Back to Jobs" restores position.
+ */
+const SESSION_KEY = "jh-list:";
+
 type JobsInfiniteListProps = {
   /** First page of results, rendered on the server. */
   initialJobs: JobListItem[];
@@ -22,6 +28,8 @@ type JobsInfiniteListProps = {
  * of the list enters the viewport.
  *
  * Remount with a `key` of `filterQuery` so changing filters resets state.
+ * State (loaded pages + scroll position) is persisted to sessionStorage and
+ * restored when the user navigates back from a job detail page.
  */
 export function JobsInfiniteList({
   initialJobs,
@@ -36,6 +44,79 @@ export function JobsInfiniteList({
   const sentinelRef = useRef<HTMLDivElement>(null);
   // Guards against duplicate loads from rapid observer callbacks.
   const loadingRef = useRef(false);
+
+  // ── Restore browsing state from sessionStorage on mount ─────────────────
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY + filterQuery);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        jobs?: unknown;
+        page?: unknown;
+        scrollY?: unknown;
+      };
+      if (!Array.isArray(saved.jobs) || saved.jobs.length === 0) return;
+
+      const savedJobs = saved.jobs as JobListItem[];
+      const savedPage = typeof saved.page === "number" ? saved.page : 1;
+      const savedScrollY = typeof saved.scrollY === "number" ? saved.scrollY : 0;
+
+      setJobs(savedJobs);
+      setPage(savedPage);
+
+      // Wait two animation frames so the restored list is fully laid out
+      // before jumping the viewport back to where the user was.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: savedScrollY });
+        });
+      });
+    } catch {
+      // Ignore corrupt / missing storage entries
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount-only — filterQuery never changes while this instance is alive
+
+  // ── Persist jobs + page whenever they change ────────────────────────────
+  // Merges into any existing entry so the scroll position saved by the
+  // scroll listener below is not accidentally overwritten.
+  useEffect(() => {
+    const key = SESSION_KEY + filterQuery;
+    try {
+      const existing = sessionStorage.getItem(key);
+      const prev = existing ? (JSON.parse(existing) as object) : {};
+      sessionStorage.setItem(key, JSON.stringify({ ...prev, jobs, page }));
+    } catch {
+      // sessionStorage may be unavailable in private browsing on some browsers
+    }
+  }, [filterQuery, jobs, page]);
+
+  // ── Persist scroll position (debounced) ─────────────────────────────────
+  useEffect(() => {
+    const key = SESSION_KEY + filterQuery;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const onScroll = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          const existing = sessionStorage.getItem(key);
+          if (!existing) return;
+          const prev = JSON.parse(existing) as object;
+          sessionStorage.setItem(
+            key,
+            JSON.stringify({ ...prev, scrollY: window.scrollY })
+          );
+        } catch {}
+      }, 200);
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (timer) clearTimeout(timer);
+    };
+  }, [filterQuery]);
 
   const hasMore = jobs.length < total;
 

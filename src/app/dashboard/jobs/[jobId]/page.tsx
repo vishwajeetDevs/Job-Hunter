@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Building2, Calendar, MapPin } from "lucide-react";
+import { Building2, Calendar, MapPin } from "lucide-react";
+
+import { BackToJobsLink } from "@/components/jobs/back-to-jobs-link";
 
 import { JobStudioWorkspace } from "@/components/studio/job-studio-workspace";
 import { Badge } from "@/components/ui/badge";
@@ -163,13 +164,7 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
 
   return (
     <div className="space-y-4">
-      <Link
-        href="/dashboard/jobs"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        Back to Jobs
-      </Link>
+      <BackToJobsLink />
 
       <JobStudioWorkspace
         jobId={job.id}
