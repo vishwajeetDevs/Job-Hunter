@@ -156,8 +156,18 @@ export type OptimizedResumeContent = {
   experience: OptimizedResumeEntry[];
   projects: OptimizedResumeEntry[];
   education: OptimizedResumeEntry[];
+  /** Preserved from original resume — certification name / issuing org / date. */
+  certifications: OptimizedResumeEntry[];
+  /** Preserved from original resume — awards, honours, notable achievements. */
+  achievements: OptimizedResumeEntry[];
   /** Concrete improvements the AI made, e.g. "Rewrote summary to target the role". */
   changes: string[];
+  /**
+   * JD requirements the optimizer could NOT truthfully add because the
+   * candidate's resume provides no supporting evidence. Shown in the UI so
+   * the user knows what to address before applying.
+   */
+  unresolvedGaps: string[];
   meta: {
     generatedAt: string;
     version: number;
@@ -233,7 +243,10 @@ export function normalizeOptimizedResumeContent(
     experience,
     projects: toEntryList(data.projects, 6),
     education,
+    certifications: toEntryList(data.certifications, 10),
+    achievements: toEntryList(data.achievements, 8),
     changes: toStringList(data.changes, 15),
+    unresolvedGaps: toStringList(data.unresolvedGaps, 12),
     meta: {
       generatedAt: storedGeneratedAt ?? new Date().toISOString(),
       version: storedVersion ?? fallbackVersion,

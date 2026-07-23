@@ -11,7 +11,7 @@ import type {
   OptimizedResumeEntry,
 } from "@/features/studio/types";
 
-type EntrySectionKey = "experience" | "projects" | "education";
+type EntrySectionKey = "experience" | "projects" | "education" | "certifications" | "achievements";
 
 const ENTRY_SECTIONS: Array<{
   key: EntrySectionKey;
@@ -36,6 +36,18 @@ const ENTRY_SECTIONS: Array<{
     title: "Education",
     headingLabel: "Degree",
     subheadingLabel: "Institution",
+  },
+  {
+    key: "certifications",
+    title: "Certifications",
+    headingLabel: "Certification name",
+    subheadingLabel: "Issuing organization",
+  },
+  {
+    key: "achievements",
+    title: "Achievements",
+    headingLabel: "Achievement title",
+    subheadingLabel: "Context / organization",
   },
 ];
 
@@ -68,10 +80,11 @@ export function OptimizedResumeEditor({
     index: number,
     partial: Partial<OptimizedResumeEntry>
   ) => {
-    const entries = content[section].map((entry, i) =>
+    const current = content[section] ?? [];
+    const updated = current.map((entry, i) =>
       i === index ? { ...entry, ...partial } : entry
     );
-    patch({ [section]: entries });
+    patch({ [section]: updated });
   };
 
   return (
@@ -155,8 +168,10 @@ export function OptimizedResumeEditor({
         </p>
       </section>
 
-      {/* Experience / Projects / Education */}
-      {ENTRY_SECTIONS.map(({ key, title, headingLabel, subheadingLabel }) => (
+      {/* Experience / Projects / Education / Certifications / Achievements */}
+      {ENTRY_SECTIONS.map(({ key, title, headingLabel, subheadingLabel }) => {
+        const entries = content[key] ?? [];
+        return (
         <section key={key} className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -167,20 +182,20 @@ export function OptimizedResumeEditor({
               variant="outline"
               size="sm"
               disabled={disabled}
-              onClick={() => patch({ [key]: [...content[key], emptyEntry()] })}
+              onClick={() => patch({ [key]: [...entries, emptyEntry()] })}
             >
               <Plus className="size-4" />
               Add {title.toLowerCase().replace(/s$/, "")}
             </Button>
           </div>
 
-          {content[key].length === 0 && (
+          {entries.length === 0 && (
             <p className="rounded-lg border border-dashed border-border/60 px-3 py-4 text-center text-sm text-muted-foreground">
               No {title.toLowerCase()} entries.
             </p>
           )}
 
-          {content[key].map((entry, index) => (
+          {entries.map((entry, index) => (
             <div
               key={`${key}-${index}`}
               className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-3"
@@ -221,7 +236,7 @@ export function OptimizedResumeEditor({
                     aria-label={`Remove ${title.toLowerCase()} entry`}
                     className="text-muted-foreground hover:text-destructive"
                     onClick={() =>
-                      patch({ [key]: content[key].filter((_, i) => i !== index) })
+                      patch({ [key]: entries.filter((_, i) => i !== index) })
                     }
                   >
                     <Trash2 className="size-4" />
@@ -265,7 +280,8 @@ export function OptimizedResumeEditor({
             </div>
           ))}
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 }

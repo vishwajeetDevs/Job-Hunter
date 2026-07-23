@@ -34,6 +34,8 @@ export function optimizedContentToText(content: OptimizedResumeContent): string 
     ["EXPERIENCE", content.experience],
     ["PROJECTS", content.projects],
     ["EDUCATION", content.education],
+    ["CERTIFICATIONS", content.certifications ?? []],
+    ["ACHIEVEMENTS", content.achievements ?? []],
   ];
 
   for (const [title, entries] of groups) {

@@ -98,6 +98,8 @@ export function OptimizedResumePreview({ content }: OptimizedResumePreviewProps)
       <EntrySection title="Experience" entries={content.experience} />
       <EntrySection title="Projects" entries={content.projects} />
       <EntrySection title="Education" entries={content.education} />
+      <EntrySection title="Certifications" entries={content.certifications ?? []} />
+      <EntrySection title="Achievements" entries={content.achievements ?? []} />
     </div>
   );
 }

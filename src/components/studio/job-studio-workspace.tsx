@@ -405,6 +405,7 @@ export function JobStudioWorkspace({
   const busy =
     saveAction.pending || rescoreAction.pending || generateAction.pending;
   const changes = optimized?.content.changes ?? [];
+  const unresolvedGaps = optimized?.content.unresolvedGaps ?? [];
   const panelReport = optimized ? (optimized.report ?? report) : report;
   const showSplit = Boolean(analyzeAction.pending || panelReport || optimized);
   const canAnalyze = Boolean(selected && jobDescription?.trim());
@@ -788,6 +789,11 @@ export function JobStudioWorkspace({
                     {changes.length}
                   </span>
                 )}
+                {id === "changes" && unresolvedGaps.length > 0 && (
+                  <span className="rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+                    {unresolvedGaps.length} gap{unresolvedGaps.length === 1 ? "" : "s"}
+                  </span>
+                )}
                 {id === "edit" && dirty && (
                   <span
                     className="size-1.5 rounded-full bg-amber-500"
@@ -866,7 +872,7 @@ export function JobStudioWorkspace({
                   no skills, roles, or achievements were invented.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-5">
                 {changes.length > 0 ? (
                   <ul className="space-y-2.5">
                     {changes.map((change) => (
@@ -884,6 +890,29 @@ export function JobStudioWorkspace({
                     Resume preview tab to compare the original and optimized
                     versions side by side.
                   </p>
+                )}
+
+                {unresolvedGaps.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                    <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                      <span>⚠</span> Unresolved gaps
+                    </p>
+                    <p className="mb-2 text-xs text-amber-600/80 dark:text-amber-500/80">
+                      These JD requirements could not be added because your original
+                      resume provides no supporting evidence. Address them before
+                      applying if you genuinely have the experience.
+                    </p>
+                    <ul className="space-y-1.5">
+                      {unresolvedGaps.map((gap) => (
+                        <li key={gap} className="flex items-start gap-2">
+                          <span className="mt-0.5 text-amber-500">–</span>
+                          <span className="text-xs text-amber-700 dark:text-amber-400">
+                            {gap}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </CardContent>
             </Card>
