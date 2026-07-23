@@ -78,12 +78,11 @@ export async function generateOptimizedResume(input: {
           ? input.targetKeywords
           : input.report?.missingKeywords,
     }),
-    // 4000 tokens: stays within the 4096-token output cap common to
-    // GPT-3.5-turbo, most Groq and OpenRouter models. Requesting more than
-    // the model's hard limit triggers a 400 from the provider → AiProviderError.
-    // 4000 is enough headroom for the expanded schema (certifications,
-    // achievements, unresolvedGaps) + full resume body without truncation.
-    maxTokens: 4000,
+    // 2500 tokens: OpenRouter on_demand tier limits each request to 8 000
+    // total tokens (input + max_tokens combined).  With the input budget now
+    // at ~2 500 tokens, 2 500 output tokens keeps the combined total ≈ 5 000,
+    // well within the 8 000 cap and still enough for a complete resume JSON.
+    maxTokens: 2500,
     // Slight creativity produces better rewrites than pure greedy decoding.
     temperature: 0.3,
   });

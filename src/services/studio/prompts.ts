@@ -14,8 +14,17 @@
  * - Output JSON limited by maxTokens in optimize.service.ts.
  */
 
-const RESUME_CHAR_BUDGET_OPTIMIZE = 7000;
-const JOB_CHAR_BUDGET = 4000;
+// OpenRouter on_demand tier caps each request at 8 000 total tokens
+// (input + max_tokens).  Keep the combined budget well under that limit:
+//   system prompt  ≈  500 tokens
+//   JD text        ≈  600 tokens  (2 400 chars ÷ 4)
+//   resume text    ≈ 1 100 tokens  (4 400 chars ÷ 4)
+//   other labels   ≈  300 tokens
+//   output budget  = 2 500 tokens
+//   ─────────────────────────────
+//   total          ≈ 5 000 tokens  (< 8 000 limit)
+const RESUME_CHAR_BUDGET_OPTIMIZE = 4400;
+const JOB_CHAR_BUDGET = 2400;
 
 // ---------------------------------------------------------------------------
 // 14-Phase Master System Prompt
