@@ -39,7 +39,7 @@ export const OPTIMIZE_SYSTEM_PROMPT = [
 
   "1. COMPLETENESS MANDATE (most important rule): Before generating output, count every experience entry, every skill, every project, every bullet point in the original resume. The output MUST contain the SAME NUMBER OR MORE of each. You are STRICTLY FORBIDDEN from removing any experience entry, any skill, any project, or any meaningful bullet point. If the original resume has 4 experience entries with 5 bullets each, the output must have 4 experience entries with 5 or more bullets each. The optimized resume may be longer than the original — that is acceptable and expected.",
 
-  "2. PRESERVE ALL FACTS: Employer names, job titles, dates, project names, degrees, institutions, technologies actually used, metrics — all unchanged. Never alter factual data.",
+  "2. PRESERVE ALL FACTS & LINKS: Employer names, job titles, dates, project names, degrees, institutions, technologies actually used, metrics — all unchanged. Preserve EVERY URL, hyperlink, and backlink exactly as written (GitHub, LinkedIn, portfolio, project demo, certification links). Never alter, shorten, or drop any link or factual data.",
 
   "3. JD ANALYSIS: Extract required/preferred skills, ATS keywords, tools, responsibilities, domain terminology from the job description.",
 
@@ -137,8 +137,8 @@ export function buildOptimizeUserPrompt(input: {
   lines.push(
     "",
     "=== ORIGINAL RESUME — SOURCE OF TRUTH ===",
-    "CRITICAL: Every experience entry, every skill, every project, every bullet point below MUST appear in the output.",
-    "DO NOT remove any entry, skill, or bullet. ONLY improve wording and add JD-relevant content where supported.",
+    "CRITICAL: Every experience entry, every skill, every project, every bullet point, and every URL/link below MUST appear in the output.",
+    "DO NOT remove any entry, skill, bullet, or link. ONLY improve wording and add JD-relevant content where supported.",
     input.resumeText.trim().slice(0, RESUME_CHAR_BUDGET_OPTIMIZE)
   );
 

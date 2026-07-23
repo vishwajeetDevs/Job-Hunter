@@ -3,7 +3,7 @@ import {
   type MatchReport,
   type OptimizedResumeContent,
 } from "@/features/studio/types";
-import { getAiProvider, isAiConfigured } from "@/services/ai";
+import { getResumeAiProvider, isAiConfigured } from "@/services/ai";
 import {
   buildOptimizeUserPrompt,
   OPTIMIZE_SYSTEM_PROMPT,
@@ -59,7 +59,10 @@ export async function generateOptimizedResume(input: {
     );
   }
 
-  const provider = getAiProvider();
+  // Uses the Cursor Agent as primary when enabled, else Groq — with an
+  // automatic Groq fallback baked in, so this call never hard-fails on a
+  // primary-provider outage.
+  const provider = getResumeAiProvider();
   const raw = await provider.completeJson({
     system: OPTIMIZE_SYSTEM_PROMPT,
     user: buildOptimizeUserPrompt({
