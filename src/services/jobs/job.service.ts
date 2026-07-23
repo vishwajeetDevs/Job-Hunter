@@ -327,36 +327,46 @@ export async function listJobs(input: {
     );
   }
 
-  // Snippet jobs rank below full-description jobs in all sort modes.
-  const completeFirst = (a: JobRecord, b: JobRecord) =>
-    Number(b.descriptionComplete) - Number(a.descriptionComplete);
+  /**
+   * Hard-partition into two groups, sort each group independently by the
+   * user's chosen criteria, then concatenate. A snippet job can never
+   * appear before any complete-description job regardless of other scores.
+   */
+  function partitionAndSort(
+    jobs: JobRecord[],
+    sorter: (a: JobRecord, b: JobRecord) => number
+  ): JobRecord[] {
+    const complete = jobs.filter((j) => j.descriptionComplete).sort(sorter);
+    const snippets = jobs.filter((j) => !j.descriptionComplete).sort(sorter);
+    return [...complete, ...snippets];
+  }
 
   if (filters.sort === "best_match") {
     const scored = filtered.map((job) => ({ job, score: matchScore(job, skills) }));
-    scored.sort(
-      (a, b) =>
-        completeFirst(a.job, b.job) ||
-        b.score - a.score ||
-        (b.job.postedAt?.getTime() ?? 0) - (a.job.postedAt?.getTime() ?? 0)
-    );
-    filtered = scored.map((entry) => entry.job);
+    const byScore = (
+      a: { job: JobRecord; score: number },
+      b: { job: JobRecord; score: number }
+    ) =>
+      b.score - a.score ||
+      (b.job.postedAt?.getTime() ?? 0) - (a.job.postedAt?.getTime() ?? 0);
+
+    const completeScored = scored.filter((e) => e.job.descriptionComplete).sort(byScore);
+    const snippetScored = scored.filter((e) => !e.job.descriptionComplete).sort(byScore);
+    filtered = [...completeScored, ...snippetScored].map((e) => e.job);
   } else if (filters.sort === "oldest") {
-    filtered = [...filtered]
-      .sort(
-        (a, b) =>
-          completeFirst(a, b) ||
-          (a.postedAt?.getTime() ?? 0) - (b.postedAt?.getTime() ?? 0)
-      );
+    filtered = partitionAndSort(
+      filtered,
+      (a, b) => (a.postedAt?.getTime() ?? 0) - (b.postedAt?.getTime() ?? 0)
+    );
   } else if (filters.sort === "company_az") {
-    filtered = [...filtered].sort(
-      (a, b) => completeFirst(a, b) || a.company.localeCompare(b.company)
+    filtered = partitionAndSort(filtered, (a, b) =>
+      a.company.localeCompare(b.company)
     );
   } else {
-    // Default "newest" — in-memory path still needs the completeness split.
-    filtered = [...filtered].sort(
-      (a, b) =>
-        completeFirst(a, b) ||
-        (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0)
+    // Default: newest first within each group.
+    filtered = partitionAndSort(
+      filtered,
+      (a, b) => (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0)
     );
   }
 
@@ -457,17 +467,24 @@ export async function listResumeMatchedJobs(input: {
   const savedJobIds = new Set(savedApplications.map((app) => app.jobId));
   const matcher = createJobMatcher(input.profile);
 
-  const ranked = candidates
+  const eligible = candidates
     .map((job) => ({ job, match: matcher.score(job) }))
-    .filter((entry) => entry.match.matchScore >= MIN_RESUME_MATCH_PERCENT)
-    .sort(
-      (a, b) =>
-        // Snippet jobs always rank after full-description jobs, regardless
-        // of match score — an incomplete JD can't be reliably scored.
-        Number(b.job.descriptionComplete) - Number(a.job.descriptionComplete) ||
-        b.match.matchScore - a.match.matchScore ||
-        (b.job.postedAt?.getTime() ?? 0) - (a.job.postedAt?.getTime() ?? 0)
-    );
+    .filter((entry) => entry.match.matchScore >= MIN_RESUME_MATCH_PERCENT);
+
+  // Sort each group independently by match score then recency, then
+  // hard-concatenate: [complete description jobs] followed by [snippet jobs].
+  // A snippet job can never appear before a complete-description job regardless
+  // of match score — an incomplete JD produces unreliable keyword scoring.
+  const byRelevance = (
+    a: { job: JobRecord; match: { matchScore: number } },
+    b: { job: JobRecord; match: { matchScore: number } }
+  ) =>
+    b.match.matchScore - a.match.matchScore ||
+    (b.job.postedAt?.getTime() ?? 0) - (a.job.postedAt?.getTime() ?? 0);
+
+  const completeGroup = eligible.filter((e) => e.job.descriptionComplete).sort(byRelevance);
+  const snippetGroup = eligible.filter((e) => !e.job.descriptionComplete).sort(byRelevance);
+  const ranked = [...completeGroup, ...snippetGroup];
 
   const start = (page - 1) * JOBS_PAGE_SIZE;
 
