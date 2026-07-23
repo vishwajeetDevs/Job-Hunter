@@ -132,6 +132,12 @@ model Job {
   latitude        Float?
   longitude       Float?
 
+  // true  = full description stored (Greenhouse/Lever/Ashby/JSearch/TheMuse, or
+  //         snippet job whose full text was later fetched from the original URL).
+  // false = only a short preview/snippet is stored (Careerjet/Adzuna/Jooble).
+  // Drives sort order: complete jobs surface before snippet jobs.
+  descriptionComplete Boolean @default(true) @map("description_complete")
+
   createdAt DateTime @default(now())
 
   // Relations: one Job → many Applications / optimized Resumes
@@ -150,6 +156,7 @@ model Job {
   @@index([employmentType])
   @@index([experienceLevel])
   @@index([latitude, longitude])
+  @@index([descriptionComplete])
   @@map("tbl_jobs")
 }
 

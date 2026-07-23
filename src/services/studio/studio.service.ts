@@ -97,6 +97,7 @@ export async function getJobForStudio(jobId: string) {
       salaryMin: true,
       salaryMax: true,
       salaryCurrency: true,
+      descriptionComplete: true,
     },
   });
 }

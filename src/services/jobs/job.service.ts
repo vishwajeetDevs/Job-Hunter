@@ -50,6 +50,7 @@ const jobSelect = {
   salaryCurrency: true,
   latitude: true,
   longitude: true,
+  descriptionComplete: true,
 } as const;
 
 type JobRecord = {
@@ -71,6 +72,7 @@ type JobRecord = {
   salaryCurrency: string | null;
   latitude: number | null;
   longitude: number | null;
+  descriptionComplete: boolean;
 };
 
 function toSnippet(description: string | null): string | null {
@@ -146,6 +148,7 @@ function toListItem(job: JobRecord, savedJobIds: Set<string>): JobListItem {
     experienceLevel: job.experienceLevel,
     salaryLabel: salaryLabel(job),
     isSaved: savedJobIds.has(job.id),
+    descriptionComplete: job.descriptionComplete,
   };
 }
 
@@ -268,12 +271,15 @@ export async function listJobs(input: {
   });
 
   if (!needsInMemory) {
+    // Complete-description jobs always surface before snippet-only jobs
+    // (descriptionComplete desc = true first, false last).
+    const descCompleteSort = { descriptionComplete: "desc" as const };
     const orderBy =
       filters.sort === "oldest"
-        ? [{ postedAt: { sort: "asc" as const, nulls: "last" as const } }, { createdAt: "asc" as const }]
+        ? [descCompleteSort, { postedAt: { sort: "asc" as const, nulls: "last" as const } }, { createdAt: "asc" as const }]
         : filters.sort === "company_az"
-          ? [{ company: "asc" as const }, { postedAt: { sort: "desc" as const, nulls: "last" as const } }]
-          : [{ postedAt: { sort: "desc" as const, nulls: "last" as const } }, { createdAt: "desc" as const }];
+          ? [descCompleteSort, { company: "asc" as const }, { postedAt: { sort: "desc" as const, nulls: "last" as const } }]
+          : [descCompleteSort, { postedAt: { sort: "desc" as const, nulls: "last" as const } }, { createdAt: "desc" as const }];
 
     const [jobs, total, savedApplications] = await Promise.all([
       prisma.job.findMany({
@@ -321,18 +327,37 @@ export async function listJobs(input: {
     );
   }
 
+  // Snippet jobs rank below full-description jobs in all sort modes.
+  const completeFirst = (a: JobRecord, b: JobRecord) =>
+    Number(b.descriptionComplete) - Number(a.descriptionComplete);
+
   if (filters.sort === "best_match") {
     const scored = filtered.map((job) => ({ job, score: matchScore(job, skills) }));
     scored.sort(
       (a, b) =>
+        completeFirst(a.job, b.job) ||
         b.score - a.score ||
         (b.job.postedAt?.getTime() ?? 0) - (a.job.postedAt?.getTime() ?? 0)
     );
     filtered = scored.map((entry) => entry.job);
   } else if (filters.sort === "oldest") {
-    filtered = [...filtered].reverse();
+    filtered = [...filtered]
+      .sort(
+        (a, b) =>
+          completeFirst(a, b) ||
+          (a.postedAt?.getTime() ?? 0) - (b.postedAt?.getTime() ?? 0)
+      );
   } else if (filters.sort === "company_az") {
-    filtered = [...filtered].sort((a, b) => a.company.localeCompare(b.company));
+    filtered = [...filtered].sort(
+      (a, b) => completeFirst(a, b) || a.company.localeCompare(b.company)
+    );
+  } else {
+    // Default "newest" — in-memory path still needs the completeness split.
+    filtered = [...filtered].sort(
+      (a, b) =>
+        completeFirst(a, b) ||
+        (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0)
+    );
   }
 
   const savedJobIds = new Set(savedApplications.map((app) => app.jobId));

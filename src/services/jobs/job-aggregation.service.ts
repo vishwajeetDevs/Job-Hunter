@@ -6,7 +6,9 @@ import type {
   JobSourceId,
   NormalizedJob,
 } from "@/services/jobs/aggregation/types";
+import { isSnippetOnlySource } from "@/services/jobs/aggregation/types";
 import { enrichNormalizedJob } from "@/services/jobs/enrichment/enrich-job";
+import { enrichSnippetJobs } from "@/services/jobs/enrichment/description-fetcher";
 
 /** Compact record of a job stored during a run, kept in the cron log. */
 export type InsertedJobSummary = {
@@ -93,10 +95,14 @@ export async function upsertNormalizedJobs(
         postedAt: job.postedAt,
         source: job.source,
         externalId: job.externalId,
+        // Snippet-only sources (Careerjet/Adzuna/Jooble) only return short
+        // previews. Flag them so they sort after jobs with full descriptions.
+        descriptionComplete: !isSnippetOnlySource(job.source),
         ...enrichment,
       };
     }),
     select: {
+      id: true,
       jobCode: true,
       source: true,
       title: true,
@@ -105,6 +111,7 @@ export async function upsertNormalizedJobs(
       jobUrl: true,
       postedAt: true,
       description: true,
+      descriptionComplete: true,
     },
     skipDuplicates: true,
   });
@@ -126,6 +133,20 @@ export async function upsertNormalizedJobs(
         : job.description
       : null,
   }));
+
+  // For newly-inserted snippet jobs, attempt to fetch the full description
+  // from the original posting URL in the background. Failures are silent.
+  const snippetInserts = created.filter((j) => !j.descriptionComplete);
+  if (snippetInserts.length > 0) {
+    // Fire-and-forget — don't await so the cron can continue with other
+    // sources while fetches run. If the process exits first, that's fine;
+    // the jobs remain as snippets until the next cron picks them up.
+    void enrichSnippetJobs(
+      snippetInserts.map((j) => ({ id: j.id, jobUrl: j.jobUrl }))
+    ).catch((err) =>
+      console.warn("[upsertNormalizedJobs] enrichSnippetJobs error:", err)
+    );
+  }
 
   return { inserted: created.length, updated, skipped, insertedJobs };
 }

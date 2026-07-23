@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   CheckCircle2,
   Download,
   ExternalLink,
@@ -601,20 +602,35 @@ export function JobStudioWorkspace({
             {jobDescription ? (
               <>
                 <JobDescriptionContent markdown={jobDescription} />
-                {descriptionLooksTruncated && jobUrl && (
-                  <p className="mt-4 text-sm text-muted-foreground">
-                    This listing only includes a preview from{" "}
-                    {jobSource ?? "the job board"}.{" "}
-                    <a
-                      href={jobUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium text-primary underline-offset-4 hover:underline"
-                    >
-                      View the original posting
-                    </a>{" "}
-                    for the complete job description.
-                  </p>
+                {descriptionLooksTruncated && (
+                  <div className="mt-4 flex gap-3 rounded-lg border border-amber-500/30 bg-amber-500/8 p-3">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    <div className="space-y-1 text-sm">
+                      <p className="font-medium text-amber-600 dark:text-amber-400">
+                        Preview description only
+                      </p>
+                      <p className="text-muted-foreground">
+                        This listing shows only a short preview from{" "}
+                        <span className="capitalize">{jobSource ?? "the job board"}</span>.
+                        AI Resume Match Score, keyword analysis, and resume
+                        optimization may be inaccurate.
+                        {jobUrl && (
+                          <>
+                            {" "}
+                            <a
+                              href={jobUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-primary underline-offset-4 hover:underline"
+                            >
+                              View the full posting
+                            </a>{" "}
+                            for better results.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
                 )}
               </>
             ) : (
