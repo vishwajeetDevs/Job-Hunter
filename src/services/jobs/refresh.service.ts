@@ -76,7 +76,7 @@ export async function getRefreshStatus(): Promise<RefreshStatus> {
   // startedAt lives inside the log JSON; ISO strings sort correctly.
   const rows = await prisma.$queryRaw<{ startedAt: string | null }[]>`
     SELECT log->>'startedAt' AS "startedAt"
-    FROM cron_execution_logs
+    FROM tbl_cron_execution_logs
     WHERE status::text IN ('SUCCESS', 'PARTIAL_SUCCESS')
       AND log->>'startedAt' IS NOT NULL
     ORDER BY log->>'startedAt' DESC

@@ -55,7 +55,7 @@ model User {
 
   // Note: `clerkUserId` and `email` are covered by the unique constraints
   // above, which create indexes automatically.
-  @@map("users")
+  @@map("tbl_users")
 }
 
 model Resume {
@@ -96,7 +96,7 @@ model Resume {
   @@index([userId])
   @@index([parentResumeId])
   @@index([jobId])
-  @@map("resumes")
+  @@map("tbl_resumes")
 }
 
 model Job {
@@ -146,7 +146,7 @@ model Job {
   @@index([employmentType])
   @@index([experienceLevel])
   @@index([latitude, longitude])
-  @@map("jobs")
+  @@map("tbl_jobs")
 }
 
 enum CronRunStatus {
@@ -175,7 +175,7 @@ model CronExecutionLog {
   status CronRunStatus @default(RUNNING)
   log    Json?
 
-  @@map("cron_execution_logs")
+  @@map("tbl_cron_execution_logs")
 }
 
 model Application {
@@ -202,5 +202,5 @@ model Application {
   @@index([jobId])
   @@index([resumeId])
   @@index([status])
-  @@map("applications")
+  @@map("tbl_applications")
 }
