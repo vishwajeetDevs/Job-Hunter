@@ -37,6 +37,10 @@ function formatPostedAt(date: Date): string {
   }).format(date);
 }
 
+function displayJobId(jobCode: string): string {
+  return jobCode.replace(/^JOB-/, "");
+}
+
 /**
  * True when the stored description is only a preview of the original
  * posting: either the source's API never returns the full text
@@ -146,7 +150,7 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
           </Badge>
         )}
         <Badge variant="outline" className="font-mono">
-          Job ID : {job.jobCode}
+          Job ID : {displayJobId(job.jobCode)}
         </Badge>
         {application && (
           <Badge variant="secondary" className="capitalize">

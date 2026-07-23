@@ -29,6 +29,10 @@ function formatPostedAt(isoDate: string): string {
   }).format(new Date(isoDate));
 }
 
+function displayJobId(jobCode: string): string {
+  return jobCode.replace(/^JOB-/, "");
+}
+
 /** Colour band for the match badge — stronger matches read greener. */
 function matchBadgeClass(percent: number): string {
   if (percent >= 75) {
@@ -99,7 +103,7 @@ export function JobCard({ job }: JobCardProps) {
               </span>
             )}
             <span className="font-mono text-xs font-medium text-foreground">
-              Job ID : {job.jobCode}
+              Job ID : {displayJobId(job.jobCode)}
             </span>
           </div>
 
