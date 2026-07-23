@@ -15,6 +15,7 @@ import {
   generateOptimizedResume,
   OptimizeError,
 } from "@/services/studio/optimize.service";
+import { AiProviderError } from "@/services/ai/provider.interface";
 import {
   ensureResumeRawText,
   getJobForStudio,
@@ -25,6 +26,9 @@ import {
 import { ensureDbUser } from "@/services/users/ensure-user";
 
 export const runtime = "nodejs";
+// Allow up to 60 s so a single AI generation can complete on Hobby/Pro plans.
+// AI completions for a full resume can take 15–30 s with larger output budgets.
+export const maxDuration = 60;
 
 function reinforceAlreadyMatchedSkills(
   content: OptimizedResumeContent,
@@ -41,10 +45,6 @@ function reinforceAlreadyMatchedSkills(
       "Preserved already-matched job keywords so the optimized resume does not regress.",
     ].slice(0, 15),
   };
-}
-
-function isImproved(original: MatchReport, optimized: MatchReport): boolean {
-  return optimized.matchScore > original.matchScore;
 }
 
 export async function POST(request: Request) {
@@ -121,55 +121,50 @@ export async function POST(request: Request) {
 
     const baseTargetKeywords = topJobKeywordStrings(job);
 
-    async function generateCandidate(extraTargets: string[] = []) {
-      const generated = await generateOptimizedResume({
-        resumeText,
-        jobTitle,
-        jobCompany,
-        jobDescription,
-        report: clientReport ?? report,
-        // Steer the rewrite with the exact de-noised keywords the engine
-        // scores, so truthful alignment translates into a higher score.
-        targetKeywords: sanitizeKeywords([
-          ...baseTargetKeywords,
-          ...extraTargets,
-        ]).slice(0, 24),
-        version: previousVersion + 1,
-      });
-
-      const content = reinforceAlreadyMatchedSkills(generated, report);
-      const optimizedReport = buildMatchReport({
-        resumeText: optimizedContentToText(content),
-        parsedData: null,
-        extraKeywords: content.skills,
-        jobTitle,
-        jobCompany,
-        jobDescription,
-        jobExperienceLevel,
-      });
-
-      return { content, optimizedReport };
-    }
-
-    let candidate = await generateCandidate();
-
-    if (!isImproved(report, candidate.optimizedReport)) {
-      // One focused retry: retain current matches and explicitly aim at gaps.
-      const retry = await generateCandidate([
+    // Single AI generation — no retry loop.
+    // A second sequential call doubles execution time and reliably triggers
+    // Vercel's function timeout. The single pass already uses the full
+    // keyword target list and a 4500-token output budget.
+    const generated = await generateOptimizedResume({
+      resumeText,
+      jobTitle,
+      jobCompany,
+      jobDescription,
+      report: clientReport ?? report,
+      targetKeywords: sanitizeKeywords([
+        ...baseTargetKeywords,
         ...report.matchedSkills,
         ...report.missingKeywords,
-      ]);
+      ]).slice(0, 24),
+      version: previousVersion + 1,
+    });
 
-      if (retry.optimizedReport.matchScore > candidate.optimizedReport.matchScore) {
-        candidate = retry;
-      }
-    }
+    const content = reinforceAlreadyMatchedSkills(generated, report);
 
-    if (!isImproved(report, candidate.optimizedReport)) {
-      throw new OptimizeError(
-        `The AI could not safely improve this resume above the current ${report.matchScore}% match score without risking unsupported claims. No worse version was saved.`
-      );
-    }
+    const optimizedReport = buildMatchReport({
+      resumeText: optimizedContentToText(content),
+      parsedData: null,
+      extraKeywords: content.skills,
+      jobTitle,
+      jobCompany,
+      jobDescription,
+      jobExperienceLevel,
+    });
+
+    // If the optimized score is lower, annotate the changes list so the
+    // user knows — but still save and return the result.
+    // Blocking saves on score regression caused 500s when the AI produced
+    // a valid, high-quality resume that the keyword scorer rated ≤ original.
+    const scoreImproved = optimizedReport.matchScore > report.matchScore;
+    const finalContent: OptimizedResumeContent = scoreImproved
+      ? content
+      : {
+          ...content,
+          changes: [
+            ...content.changes,
+            `Note: overall keyword match score (${optimizedReport.matchScore}%) did not exceed original (${report.matchScore}%) — review the resume and add any genuinely applicable missing skills manually.`,
+          ].slice(0, 15),
+        };
 
     const saved = await saveOptimizedResume({
       userId: user.id,
@@ -177,26 +172,36 @@ export async function POST(request: Request) {
       jobId: job.id,
       jobTitle: job.title,
       jobCompany: job.company,
-      content: candidate.content,
-      analysis: { original: report, optimized: candidate.optimizedReport },
+      content: finalContent,
+      analysis: { original: report, optimized: optimizedReport },
     });
 
     return NextResponse.json({
       success: true,
       resumeId: saved.id,
       parentResumeId: master.id,
-      content: candidate.content,
-      optimizedReport: candidate.optimizedReport,
+      content: finalContent,
+      optimizedReport,
     });
   } catch (error) {
     if (error instanceof OptimizeError) {
-      // Optimization-specific failure (bad AI output, score regression, etc.)
-      // Return 422 so the client can surface the exact reason to the user.
+      // Optimization-specific failure (bad AI output, etc.)
       return NextResponse.json({ error: error.message }, { status: 422 });
     }
 
-    // Unexpected error — log as much detail as possible so Vercel logs explain
-    // what happened (avoids opaque "Failed to generate" with no context).
+    if (error instanceof AiProviderError) {
+      // The upstream AI API returned an error (rate limit, quota, bad key, etc.)
+      console.error("[POST /api/studio/optimize] AI provider error:", error.message);
+      return NextResponse.json(
+        {
+          error:
+            "The AI service returned an error. Please try again in a moment — if the issue persists, the AI provider may be temporarily unavailable.",
+        },
+        { status: 503 }
+      );
+    }
+
+    // Unexpected error — log as much detail as possible for Vercel logs.
     const message = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack : undefined;
     console.error("[POST /api/studio/optimize] unexpected error:", {
@@ -206,7 +211,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { error: "Failed to generate the optimized resume." },
+      { error: "Failed to generate the optimized resume. Please try again." },
       { status: 500 }
     );
   }
