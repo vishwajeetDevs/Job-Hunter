@@ -27,9 +27,9 @@ import { ensureDbUser } from "@/services/users/ensure-user";
 import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
-// Allow up to 60 s so a single AI generation can complete on Hobby/Pro plans.
-// AI completions for a full resume can take 15–30 s with larger output budgets.
-export const maxDuration = 60;
+// 2-pass pipeline: Pass 1 (~25 s) + optional Pass 2 refinement (~20 s) + DB ops.
+// Budget 120 s total to accommodate both passes comfortably.
+export const maxDuration = 120;
 
 function reinforceAlreadyMatchedSkills(
   content: OptimizedResumeContent,
@@ -122,15 +122,14 @@ async function handler(request: Request) {
 
     const baseTargetKeywords = topJobKeywordStrings(job);
 
-    // Single AI generation — no retry loop.
-    // A second sequential call doubles execution time and reliably triggers
-    // Vercel's function timeout. The single pass already uses the full
-    // keyword target list and a 4500-token output budget.
+    // 2-pass pipeline: Pass 1 = full optimization, Pass 2 = targeted refinement
+    // (only if Pass 1 score didn't improve enough and recoverable gaps exist).
     const generated = await generateOptimizedResume({
       resumeText,
       jobTitle,
       jobCompany,
       jobDescription,
+      jobExperienceLevel,
       report: clientReport ?? report,
       targetKeywords: sanitizeKeywords([
         ...baseTargetKeywords,

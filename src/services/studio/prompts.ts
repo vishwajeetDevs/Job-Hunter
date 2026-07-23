@@ -76,6 +76,80 @@ export const OPTIMIZE_SYSTEM_PROMPT = [
 ].join(" ");
 
 // ---------------------------------------------------------------------------
+// Refinement pass — targeted second-pass prompt
+// ---------------------------------------------------------------------------
+
+/**
+ * Short system prompt for Pass 2 (targeted refinement).
+ * Assumes the input is an already-good resume; task is to close specific
+ * remaining JD gaps without touching anything else.
+ */
+export const REFINE_SYSTEM_PROMPT = [
+  "You are a resume refinement specialist performing a TARGETED second-pass improvement.",
+  "An ATS-optimized resume has already been generated. Your task is narrow and precise:",
+  "incorporate ONLY the listed recoverable JD keywords into the most relevant bullets/skills — and nothing else.",
+
+  "STRICT RULES:",
+  "1. DO NOT change: name, contact, education entries, employer names, job titles, dates, project names, or any bullet that is unrelated to the recoverable gaps.",
+  "2. DO: For each recoverable gap, find the most suitable existing bullet or skill line and naturally incorporate the JD term. If no bullet is a good fit, add ONE new supporting bullet to the most relevant experience entry.",
+  "3. The original resume is provided as EVIDENCE ONLY. Use it to confirm the candidate genuinely has experience with each gap before adding it.",
+  "4. All existing skills categories must remain. You may add gap terms into the correct category or create a new category if needed.",
+  "5. Gaps not evidenced in the original resume → keep in unresolvedGaps. Do NOT fabricate.",
+  "6. Return the complete resume JSON (same schema), not just the changed parts.",
+
+  "Reply with ONLY minified JSON (no markdown fences):",
+  JSON.stringify({
+    name: "str|null",
+    headline: "str|null",
+    contact: "str|null",
+    summary: "2-4 sentences",
+    skills: ["Category: skill1, skill2, skill3"],
+    experience: [{ heading: "role | company", subheading: "str|null", period: "str", bullets: ["..."] }],
+    projects: [{ heading: "name", subheading: "str|null", period: "str|null", bullets: ["..."] }],
+    education: [{ heading: "degree", subheading: "institution", period: "str", bullets: [] }],
+    certifications: [{ heading: "cert name", subheading: "issuer", period: "date|null", bullets: [] }],
+    achievements: [{ heading: "title", subheading: "context|null", period: "date|null", bullets: [] }],
+    changes: ["targeted improvement made"],
+    unresolvedGaps: ["skill — reason not added"],
+  }),
+].join(" ");
+
+/** Character budget for the already-optimized resume text sent to Pass 2. */
+const REFINED_RESUME_CHAR_BUDGET = 6000;
+/** Character budget for the original resume evidence in Pass 2. */
+const EVIDENCE_CHAR_BUDGET = 8000;
+
+export function buildRefineUserPrompt(input: {
+  optimizedResumeText: string;
+  originalResumeText: string;
+  jobTitle: string;
+  jobCompany: string;
+  jobDescription: string;
+  recoverableGaps: string[];
+  currentScore: number;
+  targetScore: number;
+}): string {
+  const lines = [
+    `JOB TARGET: ${input.jobTitle} at ${input.jobCompany}`,
+    `CURRENT MATCH SCORE: ${input.currentScore}/100 → TARGET: >${input.targetScore}/100`,
+    "",
+    "=== RECOVERABLE JD GAPS (add ONLY these — each is evidenced in the original resume below) ===",
+    input.recoverableGaps.join(", "),
+    "",
+    "=== JOB DESCRIPTION (for context) ===",
+    input.jobDescription.trim().slice(0, 1500),
+    "",
+    "=== ORIGINAL RESUME (evidence source — do NOT copy wholesale; use to confirm real experience) ===",
+    input.originalResumeText.trim().slice(0, EVIDENCE_CHAR_BUDGET),
+    "",
+    "=== CURRENT OPTIMIZED RESUME (improve this, keep everything else intact) ===",
+    input.optimizedResumeText.trim().slice(0, REFINED_RESUME_CHAR_BUDGET),
+  ];
+
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // User prompt builder
 // ---------------------------------------------------------------------------
 
