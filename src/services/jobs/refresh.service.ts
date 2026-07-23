@@ -31,12 +31,27 @@ const ANCHOR_MINUTE_UTC = 30;
 const JOB_MAX_AGE_DAYS = 60;
 
 export type RefreshRunSummary = {
+  status: "SUCCESS" | "PARTIAL_SUCCESS" | "FAILED";
   fetched: number;
   inserted: number;
+  updated: number;
   skipped: number;
   deleted: number;
   failedSources: string[];
   durationMs: number;
+};
+
+/** Per-source entry stored in CronExecutionLog.details.sources. */
+type SourceLogEntry = {
+  source: string;
+  target: string;
+  status: "success" | "failed";
+  fetched: number;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  durationMs: number;
+  error?: string;
 };
 
 /**
@@ -65,13 +80,14 @@ export type RefreshStatus = {
 
 /** Last recorded ingestion run + next scheduled run, for the jobs page UI. */
 export async function getRefreshStatus(): Promise<RefreshStatus> {
-  const lastRun = await prisma.ingestionRun.findFirst({
-    orderBy: { createdAt: "desc" },
-    select: { createdAt: true },
+  const lastRun = await prisma.cronExecutionLog.findFirst({
+    where: { completedAt: { not: null }, status: { not: "FAILED" } },
+    orderBy: { startedAt: "desc" },
+    select: { startedAt: true },
   });
 
   return {
-    lastRefreshAt: lastRun?.createdAt.toISOString() ?? null,
+    lastRefreshAt: lastRun?.startedAt.toISOString() ?? null,
     nextRefreshAt: getNextRefreshAt().toISOString(),
   };
 }
@@ -104,67 +120,136 @@ export async function cleanupExpiredJobs(): Promise<number> {
 /**
  * Runs one full refresh cycle. Server-side only — invoked by the cron
  * route, never from the browser.
+ *
+ * Every execution writes one CronExecutionLog row: claimed as RUNNING
+ * at start, then finalized with per-source counts, a JSON source-wise
+ * breakdown, and an overall status (SUCCESS / PARTIAL_SUCCESS / FAILED).
+ * Logging failures never abort the refresh itself.
  */
 export async function runJobsRefresh(
   triggeredBy: string
 ): Promise<RefreshRunSummary> {
   const startedAt = Date.now();
 
-  // Claim the run row first so overlapping invocations are visible in
-  // ingestion_runs even if this run later fails.
-  const run = await prisma.ingestionRun.create({
-    data: { triggeredBy },
+  // Claim the log row first so overlapping or crashed invocations are
+  // still visible in the history (a stale RUNNING row = crashed run).
+  const run = await prisma.cronExecutionLog.create({
+    data: { triggeredBy, totalSources: TRACKED_COMPANIES.length },
     select: { id: true },
   });
 
-  // Every source runs independently — failures are collected per source
-  // and never abort the batch (see ingestJobsFromSource).
-  // Careerjet reads CAREERJET_USER_IP inside its adapter (whitelisted IP).
-  const results = await ingestJobsFromTargets(TRACKED_COMPANIES);
-
-  const summary = results.reduce(
-    (acc, result) => ({
-      fetched: acc.fetched + result.fetched,
-      inserted: acc.inserted + result.inserted,
-      skipped: acc.skipped + result.skipped,
-    }),
-    { fetched: 0, inserted: 0, skipped: 0 }
-  );
-
-  const failedSources = results
-    .filter((result) => result.error)
-    .map((result) => `${result.source}:${result.companyToken}`);
-
-  // Backfill enrichment for any rows that predate the enrichment fields.
-  for (let i = 0; i < 10; i += 1) {
-    const enriched = await enrichMissingJobs();
-    if (enriched === 0) break;
-  }
-
-  // Expire stale listings after inserting fresh ones.
-  let deleted = 0;
   try {
-    deleted = await cleanupExpiredJobs();
+    // Every source runs independently — failures are collected per source
+    // and never abort the batch (see ingestJobsFromSource).
+    // Careerjet reads CAREERJET_USER_IP inside its adapter (whitelisted IP).
+    const results = await ingestJobsFromTargets(TRACKED_COMPANIES);
+
+    const summary = results.reduce(
+      (acc, result) => ({
+        fetched: acc.fetched + result.fetched,
+        inserted: acc.inserted + result.inserted,
+        updated: acc.updated + result.updated,
+        skipped: acc.skipped + result.skipped,
+      }),
+      { fetched: 0, inserted: 0, updated: 0, skipped: 0 }
+    );
+
+    const failedSources = results
+      .filter((result) => result.error)
+      .map((result) => `${result.source}:${result.companyToken}`);
+
+    // Backfill enrichment for any rows that predate the enrichment fields.
+    for (let i = 0; i < 10; i += 1) {
+      const enriched = await enrichMissingJobs();
+      if (enriched === 0) break;
+    }
+
+    // Expire stale listings after inserting fresh ones.
+    let deleted = 0;
+    try {
+      deleted = await cleanupExpiredJobs();
+    } catch (error) {
+      // Cleanup failing shouldn't fail the refresh — log and move on.
+      console.error("[runJobsRefresh] cleanup failed:", error);
+    }
+
+    const durationMs = Date.now() - startedAt;
+    const status: RefreshRunSummary["status"] =
+      failedSources.length === 0
+        ? "SUCCESS"
+        : failedSources.length === results.length
+          ? "FAILED"
+          : "PARTIAL_SUCCESS";
+
+    const sources: SourceLogEntry[] = results.map((result) => ({
+      source: result.source,
+      target: result.companyToken,
+      status: result.error ? "failed" : "success",
+      fetched: result.fetched,
+      inserted: result.inserted,
+      updated: result.updated,
+      skipped: result.skipped,
+      durationMs: result.durationMs,
+      ...(result.error ? { error: result.error } : {}),
+    }));
+
+    const errors = results
+      .filter((result) => result.error)
+      .map((result) => `${result.source}:${result.companyToken} — ${result.error}`);
+
+    // Finalize the log row; a logging failure must not fail the refresh.
+    try {
+      await prisma.cronExecutionLog.update({
+        where: { id: run.id },
+        data: {
+          status,
+          completedAt: new Date(),
+          durationMs,
+          successfulSources: results.length - failedSources.length,
+          failedSources: failedSources.length,
+          fetched: summary.fetched,
+          inserted: summary.inserted,
+          updated: summary.updated,
+          skipped: summary.skipped,
+          deleted,
+          details: { sources, errors },
+        },
+      });
+    } catch (error) {
+      console.error("[runJobsRefresh] failed to write execution log:", error);
+    }
+
+    console.log(
+      `[runJobsRefresh] ${status} in ${Math.round(durationMs / 1000)}s — ` +
+        `fetched ${summary.fetched}, inserted ${summary.inserted}, ` +
+        `updated ${summary.updated}, skipped ${summary.skipped}, ` +
+        `deleted ${deleted}` +
+        (failedSources.length > 0
+          ? `, failed: ${failedSources.join(", ")}`
+          : "")
+    );
+
+    return { status, ...summary, deleted, failedSources, durationMs };
   } catch (error) {
-    // Cleanup failing shouldn't fail the refresh — log and move on.
-    console.error("[runJobsRefresh] cleanup failed:", error);
+    // Unexpected crash (DB down, out of memory, ...) — record the failure
+    // on the claimed row before propagating.
+    try {
+      await prisma.cronExecutionLog.update({
+        where: { id: run.id },
+        data: {
+          status: "FAILED",
+          completedAt: new Date(),
+          durationMs: Date.now() - startedAt,
+          details: {
+            sources: [],
+            errors: [error instanceof Error ? error.message : String(error)],
+          },
+        },
+      });
+    } catch (logError) {
+      console.error("[runJobsRefresh] failed to record crash:", logError);
+    }
+
+    throw error;
   }
-
-  await prisma.ingestionRun.update({
-    where: { id: run.id },
-    data: { fetched: summary.fetched, inserted: summary.inserted },
-  });
-
-  const durationMs = Date.now() - startedAt;
-
-  console.log(
-    `[runJobsRefresh] done in ${Math.round(durationMs / 1000)}s — ` +
-      `fetched ${summary.fetched}, inserted ${summary.inserted}, ` +
-      `skipped ${summary.skipped}, deleted ${deleted}` +
-      (failedSources.length > 0
-        ? `, failed: ${failedSources.join(", ")}`
-        : "")
-  );
-
-  return { ...summary, deleted, failedSources, durationMs };
 }

@@ -146,19 +146,47 @@ model Job {
   @@map("jobs")
 }
 
-// Records each job-ingestion run. Used to enforce a refresh cooldown so
-// on-demand refreshes don't exhaust external API quotas. A future cron
-// can log runs here too (triggeredBy = "cron").
-model IngestionRun {
-  id          String   @id @default(cuid())
-  // Clerk user id that triggered it, or "cron" for scheduled runs.
-  triggeredBy String?
-  fetched     Int      @default(0)
-  inserted    Int      @default(0)
-  createdAt   DateTime @default(now())
+enum CronRunStatus {
+  // Row is claimed at run start; a row stuck in RUNNING means the
+  // process crashed before it could record an outcome.
+  RUNNING
+  SUCCESS
+  // Some sources failed but at least one succeeded.
+  PARTIAL_SUCCESS
+  FAILED
+}
 
-  @@index([createdAt])
-  @@map("ingestion_runs")
+// Complete history of every jobs-refresh execution (cron or manual).
+// One row per run; rows are never deleted so past runs stay available
+// for monitoring, debugging, and historical analysis.
+model CronExecutionLog {
+  id          String        @id @default(cuid())
+  // "cron" for scheduled runs; other labels for manual/backfill runs.
+  triggeredBy String        @default("cron")
+  status      CronRunStatus @default(RUNNING)
+
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  durationMs  Int?
+
+  totalSources      Int @default(0)
+  successfulSources Int @default(0)
+  failedSources     Int @default(0)
+
+  // Aggregate record counts across all sources for this run.
+  fetched  Int @default(0)
+  inserted Int @default(0)
+  updated  Int @default(0)
+  skipped  Int @default(0)
+  deleted  Int @default(0)
+
+  // Source-wise breakdown and errors:
+  // { sources: [{ source, target, status, fetched, inserted, updated,
+  //   skipped, durationMs, error? }], errors: string[] }
+  details Json?
+
+  @@index([startedAt])
+  @@map("cron_execution_logs")
 }
 
 model Application {

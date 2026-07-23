@@ -13,7 +13,11 @@ export type JobIngestionResult = {
   companyToken: string;
   fetched: number;
   inserted: number;
+  /** Existing rows whose stored description was refreshed in place. */
+  updated: number;
   skipped: number;
+  /** Wall-clock time spent fetching + persisting this source. */
+  durationMs: number;
   error?: string;
 };
 
@@ -47,9 +51,9 @@ function capDescription(description: string | null | undefined): string | null {
  */
 export async function upsertNormalizedJobs(
   jobs: NormalizedJob[]
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<{ inserted: number; updated: number; skipped: number }> {
   if (jobs.length === 0) {
-    return { inserted: 0, skipped: 0 };
+    return { inserted: 0, updated: 0, skipped: 0 };
   }
 
   const result = await prisma.job.createMany({
@@ -72,11 +76,9 @@ export async function upsertNormalizedJobs(
   });
 
   const skipped = jobs.length - result.count;
-  if (skipped > 0) {
-    await refreshTruncatedDescriptions(jobs);
-  }
+  const updated = skipped > 0 ? await refreshTruncatedDescriptions(jobs) : 0;
 
-  return { inserted: result.count, skipped };
+  return { inserted: result.count, updated, skipped };
 }
 
 /**
@@ -84,8 +86,9 @@ export async function upsertNormalizedJobs(
  * different text than what we have — heals rows saved under the old 6k
  * cap or the old plain-text formatting. Once a row matches the fetched
  * text this is a no-op, so steady-state refreshes do zero writes.
+ * Returns the number of rows updated.
  */
-async function refreshTruncatedDescriptions(jobs: NormalizedJob[]): Promise<void> {
+async function refreshTruncatedDescriptions(jobs: NormalizedJob[]): Promise<number> {
   const byKey = new Map(
     jobs.map((job) => [`${job.source}\u0000${job.externalId}`, job])
   );
@@ -115,6 +118,8 @@ async function refreshTruncatedDescriptions(jobs: NormalizedJob[]): Promise<void
       `[refreshTruncatedDescriptions] healed ${updates.length} ${jobs[0].source} descriptions`
     );
   }
+
+  return updates.length;
 }
 
 /**
@@ -125,6 +130,7 @@ export async function ingestJobsFromSource(
 ): Promise<JobIngestionResult> {
   const { source, ...options } = target;
   const adapter = getJobSourceAdapter(source);
+  const startedAt = Date.now();
 
   // Keyed sources (adzuna/jsearch) are optional — skip quietly until
   // their API keys are set instead of failing every refresh.
@@ -137,20 +143,24 @@ export async function ingestJobsFromSource(
       companyToken: options.companyToken,
       fetched: 0,
       inserted: 0,
+      updated: 0,
       skipped: 0,
+      durationMs: 0,
     };
   }
 
   try {
     const jobs = await adapter.fetchJobs(options);
-    const { inserted, skipped } = await upsertNormalizedJobs(jobs);
+    const { inserted, updated, skipped } = await upsertNormalizedJobs(jobs);
 
     return {
       source,
       companyToken: options.companyToken,
       fetched: jobs.length,
       inserted,
+      updated,
       skipped,
+      durationMs: Date.now() - startedAt,
     };
   } catch (error) {
     const message =
@@ -165,7 +175,9 @@ export async function ingestJobsFromSource(
       companyToken: options.companyToken,
       fetched: 0,
       inserted: 0,
+      updated: 0,
       skipped: 0,
+      durationMs: Date.now() - startedAt,
       error: message,
     };
   }
