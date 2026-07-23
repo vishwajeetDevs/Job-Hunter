@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
 import { isJobSourceId, normalizeJobSourceQuery } from "@/services/jobs/aggregation/types";
 import { findCityByName } from "@/services/jobs/enrichment/cities";
-import { enrichExistingJob } from "@/services/jobs/enrichment/enrich-job";
+import { enrichExistingJob, extractSalaryEnrichment } from "@/services/jobs/enrichment/enrich-job";
 import { boundingBox, haversineKm } from "@/services/jobs/enrichment/geo";
 import {
   buildResumeMatchProfile,
@@ -90,9 +90,24 @@ function toSnippet(description: string | null): string | null {
 }
 
 function salaryLabel(job: JobRecord): string | null {
-  if (!job.salaryMin && !job.salaryMax) return null;
+  // Prefer structured DB columns, fall back to JD extraction for display.
+  const salaryMin = job.salaryMin;
+  const salaryMax = job.salaryMax;
+  const salaryCurrency = job.salaryCurrency;
 
-  const currency = job.salaryCurrency ?? "";
+  if (!salaryMin && !salaryMax) {
+    // No structured data — try to extract from the description on the fly.
+    const extracted = extractSalaryEnrichment(job.description);
+    if (!extracted || (!extracted.salaryMin && !extracted.salaryMax)) return null;
+    return salaryLabel({
+      ...job,
+      salaryMin: extracted.salaryMin,
+      salaryMax: extracted.salaryMax,
+      salaryCurrency: extracted.salaryCurrency,
+    });
+  }
+
+  const currency = salaryCurrency ?? "";
   const isInr = currency.toUpperCase() === "INR" || currency === "₹";
 
   // Round to one decimal and drop a trailing ".0".
@@ -108,10 +123,10 @@ function salaryLabel(job: JobRecord): string | null {
     return value >= 1000 ? `${Math.round(value / 1000)}K` : String(value);
   };
 
-  if (job.salaryMin && job.salaryMax) {
-    return `${currency} ${format(job.salaryMin)}–${format(job.salaryMax)}`.trim();
+  if (salaryMin && salaryMax) {
+    return `${currency} ${format(salaryMin)}–${format(salaryMax)}`.trim();
   }
-  const single = job.salaryMin ?? job.salaryMax;
+  const single = salaryMin ?? salaryMax;
   return single ? `${currency} ${format(single)}+`.trim() : null;
 }
 
