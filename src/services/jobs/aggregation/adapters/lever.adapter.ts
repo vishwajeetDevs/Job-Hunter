@@ -3,7 +3,7 @@ import {
   type JobSourceAdapter,
 } from "@/services/jobs/aggregation/adapter.interface";
 import {
-  htmlToPlainText,
+  htmlToMarkdown,
   toDateOrNull,
   type JobFetchOptions,
   type NormalizedJob,
@@ -57,9 +57,11 @@ export class LeverAdapter implements JobSourceAdapter {
         title: posting.text,
         company: options.companyName ?? options.companyToken,
         location: posting.categories?.location ?? null,
-        description:
-          posting.descriptionPlain ??
-          (posting.description ? htmlToPlainText(posting.description) : null),
+        // Prefer the HTML body — it carries headings/lists the plain
+        // variant flattens away.
+        description: posting.description
+          ? htmlToMarkdown(posting.description)
+          : (posting.descriptionPlain ?? null),
         url: posting.hostedUrl ?? null,
         source: this.source,
         postedAt: toDateOrNull(posting.createdAt),

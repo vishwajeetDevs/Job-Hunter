@@ -99,18 +99,70 @@ export type JobFetchOptions = {
   userIp?: string;
 };
 
-/** Strips HTML tags and decodes common entities from job descriptions. */
-export function htmlToPlainText(html: string): string {
-  return html
+function decodeEntities(text: string): string {
+  return text
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;|&apos;/g, "'")
     .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&");
+}
+
+/** Strips HTML tags and decodes common entities from job descriptions. */
+export function htmlToPlainText(html: string): string {
+  return decodeEntities(
+    decodeEntities(html) // twice: some boards double-encode ("&amp;amp;")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+  )
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/**
+ * Converts job-description HTML into a small Markdown subset so the
+ * original structure survives storage: headings, bullet/numbered lists,
+ * bold/italic emphasis, horizontal rules, and paragraph breaks.
+ * Rendered by `JobDescriptionContent`; stays readable as raw text and
+ * safe for keyword matching (markers are punctuation the tokenizer skips).
+ */
+export function htmlToMarkdown(html: string): string {
+  // First decode pass: boards like Greenhouse ship the HTML itself
+  // entity-encoded ("&lt;p&gt;"); text-level entities decode at the end.
+  let text = decodeEntities(html)
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
+
+  // Number ordered-list items before generic tag handling.
+  text = text.replace(/<ol[^>]*>([\s\S]*?)<\/ol>/gi, (_match, inner: string) => {
+    let index = 0;
+    return `\n${inner.replace(/<li[^>]*>/gi, () => `\n${++index}. `)}\n`;
+  });
+
+  text = text
+    .replace(/<li[^>]*>/gi, "\n- ")
+    .replace(/<\/li>/gi, "")
+    .replace(/<h([1-6])[^>]*>/gi, (_match, level: string) => {
+      return `\n\n${"#".repeat(Math.min(Number(level), 4))} `;
+    })
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<(strong|b)\b[^>]*>/gi, "**")
+    .replace(/<\/(strong|b)>/gi, "**")
+    .replace(/<(em|i)\b[^>]*>/gi, "*")
+    .replace(/<\/(em|i)>/gi, "*")
+    .replace(/<hr\s*\/?>/gi, "\n\n---\n\n")
     .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
+    .replace(/<\/(p|div|section|article|ul|ol|table|tr)>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "");
+
+  return decodeEntities(text)
+    .replace(/\*\*\s*\*\*/g, "") // empty bold pairs from icon-only tags
+    // Bold spans that swallowed a paragraph break ("**Benefits\n\n**At…")
+    // — close the bold before the break instead.
+    .replace(/\*\*([^*\n][^*]*?)\s*\n{2,}\s*\*\*/g, "**$1**\n\n")
+    .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

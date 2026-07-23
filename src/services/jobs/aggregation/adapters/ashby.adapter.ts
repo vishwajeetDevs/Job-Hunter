@@ -3,7 +3,7 @@ import {
   type JobSourceAdapter,
 } from "@/services/jobs/aggregation/adapter.interface";
 import {
-  htmlToPlainText,
+  htmlToMarkdown,
   toDateOrNull,
   type JobFetchOptions,
   type NormalizedJob,
@@ -46,9 +46,11 @@ export class AshbyAdapter implements JobSourceAdapter {
       title: job.title,
       company: options.companyName ?? options.companyToken,
       location: job.location ?? (job.isRemote ? "Remote" : null),
-      description:
-        job.descriptionPlain ??
-        (job.descriptionHtml ? htmlToPlainText(job.descriptionHtml) : null),
+      // Prefer the HTML body — it carries headings/lists the plain
+      // variant flattens away.
+      description: job.descriptionHtml
+        ? htmlToMarkdown(job.descriptionHtml)
+        : (job.descriptionPlain ?? null),
       url: job.jobUrl ?? job.applyUrl ?? null,
       source: this.source,
       postedAt: toDateOrNull(job.publishedAt),

@@ -3,7 +3,7 @@ import {
   type JobSourceAdapter,
 } from "@/services/jobs/aggregation/adapter.interface";
 import {
-  htmlToPlainText,
+  htmlToMarkdown,
   toDateOrNull,
   type JobFetchOptions,
   type NormalizedJob,
@@ -44,7 +44,7 @@ export class GreenhouseAdapter implements JobSourceAdapter {
       title: job.title,
       company: options.companyName ?? job.company_name ?? options.companyToken,
       location: job.location?.name ?? null,
-      description: job.content ? htmlToPlainText(job.content) : null,
+      description: job.content ? htmlToMarkdown(job.content) : null,
       url: job.absolute_url ?? null,
       source: this.source,
       postedAt: toDateOrNull(job.first_published ?? job.updated_at),

@@ -19,6 +19,7 @@ import {
   Upload,
 } from "lucide-react";
 
+import { JobDescriptionContent } from "@/components/jobs/job-description-content";
 import { FileUpload } from "@/components/resume/file-upload";
 import {
   MatchAnalysisPanel,
@@ -588,9 +589,7 @@ export function JobStudioWorkspace({
           <CardContent className="pb-4">
             {jobDescription ? (
               <>
-                <div className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-                  {jobDescription}
-                </div>
+                <JobDescriptionContent markdown={jobDescription} />
                 {descriptionLooksTruncated && jobUrl && (
                   <p className="mt-4 text-sm text-muted-foreground">
                     This listing only includes a preview from{" "}

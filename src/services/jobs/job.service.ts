@@ -73,7 +73,16 @@ type JobRecord = {
 
 function toSnippet(description: string | null): string | null {
   if (!description) return null;
-  const flattened = description.replace(/\s+/g, " ").trim();
+  const flattened = description
+    // Descriptions are stored as light markdown; cards show plain text.
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*\s][^*]*)\*/g, "$1")
+    .replace(/^[-*]\s+/gm, "")
+    .replace(/^\d+[.)]\s+/gm, "")
+    .replace(/^-{3,}\s*$/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
   if (flattened.length <= SNIPPET_LENGTH) return flattened;
   return `${flattened.slice(0, SNIPPET_LENGTH).trimEnd()}…`;
 }

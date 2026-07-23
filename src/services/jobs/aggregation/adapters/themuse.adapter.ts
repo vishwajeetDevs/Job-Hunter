@@ -4,7 +4,7 @@ import {
 } from "@/services/jobs/aggregation/adapter.interface";
 import {
   formatLocationList,
-  htmlToPlainText,
+  htmlToMarkdown,
   toDateOrNull,
   type JobFetchOptions,
   type NormalizedJob,
@@ -87,7 +87,7 @@ export class TheMuseAdapter implements JobSourceAdapter {
           company: job.company?.name?.trim() || "Unknown company",
           location:
             formatLocationList(locationNames) ?? options.location ?? null,
-          description: job.contents ? htmlToPlainText(job.contents) : null,
+          description: job.contents ? htmlToMarkdown(job.contents) : null,
           url: job.refs?.landing_page ?? null,
           source: this.source,
           postedAt: toDateOrNull(job.publication_date),

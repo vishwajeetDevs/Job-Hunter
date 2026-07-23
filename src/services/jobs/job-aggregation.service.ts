@@ -80,9 +80,10 @@ export async function upsertNormalizedJobs(
 }
 
 /**
- * Updates descriptions of already-stored jobs when the source now
- * provides meaningfully more text than what we have (rows ingested
- * under the old, smaller description cap). No-ops once healed.
+ * Updates descriptions of already-stored jobs when the source returns
+ * different text than what we have — heals rows saved under the old 6k
+ * cap or the old plain-text formatting. Once a row matches the fetched
+ * text this is a no-op, so steady-state refreshes do zero writes.
  */
 async function refreshTruncatedDescriptions(jobs: NormalizedJob[]): Promise<void> {
   const byKey = new Map(
@@ -100,12 +101,7 @@ async function refreshTruncatedDescriptions(jobs: NormalizedJob[]): Promise<void
   const updates = existing.flatMap((row) => {
     const fetched = byKey.get(`${row.source}\u0000${row.externalId}`);
     const next = capDescription(fetched?.description);
-    if (!next) return [];
-
-    const storedLength = row.description?.length ?? 0;
-    // Only rewrite when the new text is meaningfully longer — avoids
-    // thousands of no-op updates on every refresh.
-    if (next.length <= storedLength + 50) return [];
+    if (!next || next === row.description) return [];
 
     return prisma.job.update({
       where: { id: row.id },
