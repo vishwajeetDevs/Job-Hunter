@@ -99,7 +99,7 @@ export function JobCard({ job }: JobCardProps) {
               </span>
             )}
             <span className="font-mono text-xs font-medium text-foreground">
-              ID {job.jobCode}
+              Job ID : {job.jobCode}
             </span>
           </div>
 

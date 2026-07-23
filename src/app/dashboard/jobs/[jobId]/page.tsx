@@ -146,7 +146,7 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
           </Badge>
         )}
         <Badge variant="outline" className="font-mono">
-          ID {job.jobCode}
+          Job ID : {job.jobCode}
         </Badge>
         {application && (
           <Badge variant="secondary" className="capitalize">
