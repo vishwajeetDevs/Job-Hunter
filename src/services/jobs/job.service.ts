@@ -437,7 +437,11 @@ export async function listResumeMatchedJobs(input: {
 
   const [candidates, savedApplications] = await Promise.all([
     prisma.job.findMany({
+      // Complete-description jobs feed the candidate pool first so that
+      // when the cap (RESUME_MATCH_CAP) trims the list, snippet jobs are
+      // the ones dropped — not higher-scoring complete-description jobs.
       orderBy: [
+        { descriptionComplete: "desc" },
         { postedAt: { sort: "desc", nulls: "last" } },
         { createdAt: "desc" },
       ],
@@ -458,6 +462,9 @@ export async function listResumeMatchedJobs(input: {
     .filter((entry) => entry.match.matchScore >= MIN_RESUME_MATCH_PERCENT)
     .sort(
       (a, b) =>
+        // Snippet jobs always rank after full-description jobs, regardless
+        // of match score — an incomplete JD can't be reliably scored.
+        Number(b.job.descriptionComplete) - Number(a.job.descriptionComplete) ||
         b.match.matchScore - a.match.matchScore ||
         (b.job.postedAt?.getTime() ?? 0) - (a.job.postedAt?.getTime() ?? 0)
     );
