@@ -8,6 +8,7 @@ import {
   buildOptimizeUserPrompt,
   OPTIMIZE_SYSTEM_PROMPT,
 } from "@/services/studio/prompts";
+import { enforceSkillsPreservation } from "@/services/studio/skills-guard";
 
 export class OptimizeError extends Error {
   constructor(message: string) {
@@ -112,6 +113,11 @@ export async function generateOptimizedResume(input: {
       "The AI returned an unusable resume. Please try regenerating."
     );
   }
+
+  // Deterministic safety net: guarantee the Technical Skills section never
+  // regresses below the original's category structure/content, regardless
+  // of how faithfully the model followed the prompt instructions.
+  content.skills = enforceSkillsPreservation(content.skills, input.resumeText);
 
   return content;
 }
