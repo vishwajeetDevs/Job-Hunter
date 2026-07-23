@@ -1,6 +1,7 @@
 import {
   JobSourceError,
   postJson,
+  stableExternalId,
   type JobSourceAdapter,
 } from "@/services/jobs/aggregation/adapter.interface";
 import {
@@ -78,11 +79,16 @@ export class JoobleAdapter implements JobSourceAdapter {
       for (const job of results) {
         if (!job.link || !job.title) continue;
 
+        const company = job.company?.trim() || "Unknown company";
+        const location = job.location?.trim() || options.location || null;
+
         jobs.push({
-          externalId: job.id ? String(job.id) : job.link,
+          // Jooble ids/links change across searches for the same posting —
+          // hash the job's content identity so re-fetches deduplicate.
+          externalId: stableExternalId([this.source, job.title, company, location]),
           title: job.title,
-          company: job.company?.trim() || "Unknown company",
-          location: job.location?.trim() || options.location || null,
+          company,
+          location,
           description: job.snippet ? htmlToPlainText(job.snippet) : null,
           url: job.link,
           source: this.source,

@@ -1,6 +1,7 @@
 import {
   fetchJson,
   JobSourceError,
+  stableExternalId,
   type JobSourceAdapter,
 } from "@/services/jobs/aggregation/adapter.interface";
 import {
@@ -73,11 +74,16 @@ export class AdzunaAdapter implements JobSourceAdapter {
       for (const job of results) {
         if (!job.id || !job.title) continue;
 
+        const company = job.company?.display_name ?? "Unknown company";
+        const location = job.location?.display_name ?? options.location ?? null;
+
         jobs.push({
-          externalId: String(job.id),
+          // Adzuna re-lists the same posting under fresh ids — hash the
+          // job's content identity so re-lists don't become duplicates.
+          externalId: stableExternalId([this.source, job.title, company, location]),
           title: job.title,
-          company: job.company?.display_name ?? "Unknown company",
-          location: job.location?.display_name ?? options.location ?? null,
+          company,
+          location,
           description: job.description?.trim() || null,
           url: job.redirect_url ?? null,
           source: this.source,

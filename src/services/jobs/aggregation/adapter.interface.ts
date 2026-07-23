@@ -1,8 +1,28 @@
+import { createHash } from "node:crypto";
+
 import type {
   JobFetchOptions,
   JobSourceId,
   NormalizedJob,
 } from "@/services/jobs/aggregation/types";
+
+/**
+ * Content-derived externalId for sources without a stable job id.
+ *
+ * Careerjet/Jooble/Adzuna return per-search tracking URLs or re-listed
+ * ids, so the same posting would get a fresh identity on every fetch and
+ * slip past the [source, externalId] unique constraint as a duplicate.
+ * Hashing what actually identifies the job (source + title + company +
+ * location) keeps the key stable across fetches.
+ */
+export function stableExternalId(
+  parts: Array<string | null | undefined>
+): string {
+  const normalized = parts
+    .map((part) => (part ?? "").toLowerCase().replace(/\s+/g, " ").trim())
+    .join("|");
+  return createHash("sha1").update(normalized).digest("hex");
+}
 
 /**
  * Contract for job source adapters.

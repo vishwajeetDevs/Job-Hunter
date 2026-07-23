@@ -1,6 +1,7 @@
 import {
   fetchJson,
   JobSourceError,
+  stableExternalId,
   type JobSourceAdapter,
 } from "@/services/jobs/aggregation/adapter.interface";
 import {
@@ -117,12 +118,16 @@ export class CareerjetAdapter implements JobSourceAdapter {
         // Only yearly ranges map cleanly onto our annual salary filter.
         const isYearlySalary = job.salary_type === "Y";
 
+        const company = job.company?.trim() || "Unknown company";
+        const location = job.locations?.trim() || options.location || null;
+
         jobs.push({
-          // Careerjet has no stable id field; the redirect URL is unique.
-          externalId: job.url,
+          // Careerjet has no stable id and its redirect URLs carry
+          // per-search tokens — hash the job's content identity instead.
+          externalId: stableExternalId([this.source, job.title, company, location]),
           title: job.title,
-          company: job.company?.trim() || "Unknown company",
-          location: job.locations?.trim() || options.location || null,
+          company,
+          location,
           description: job.description
             ? htmlToPlainText(job.description)
             : null,
