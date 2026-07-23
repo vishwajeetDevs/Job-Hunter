@@ -14,17 +14,18 @@
  * - Output JSON limited by maxTokens in optimize.service.ts.
  */
 
-// OpenRouter on_demand tier caps each request at 8 000 total tokens
-// (input + max_tokens).  Keep the combined budget well under that limit:
-//   system prompt  ≈  500 tokens
-//   JD text        ≈  600 tokens  (2 400 chars ÷ 4)
-//   resume text    ≈ 1 100 tokens  (4 400 chars ÷ 4)
-//   other labels   ≈  300 tokens
-//   output budget  = 2 500 tokens
+// Token budget for AI resume optimization.
+// Groq supports large contexts; use generous budgets so the full resume
+// text always reaches the model and the output is never truncated.
+//   system prompt  ≈   600 tokens
+//   JD text        ≈   750 tokens  (3 000 chars ÷ 4)
+//   resume text    ≈ 3 500 tokens  (14 000 chars ÷ 4)
+//   other labels   ≈   300 tokens
+//   output budget  = 5 000 tokens
 //   ─────────────────────────────
-//   total          ≈ 5 000 tokens  (< 8 000 limit)
-const RESUME_CHAR_BUDGET_OPTIMIZE = 4400;
-const JOB_CHAR_BUDGET = 2400;
+//   total          ≈ 10 150 tokens
+const RESUME_CHAR_BUDGET_OPTIMIZE = 14000;
+const JOB_CHAR_BUDGET = 3000;
 
 // ---------------------------------------------------------------------------
 // 14-Phase Master System Prompt
@@ -32,37 +33,46 @@ const JOB_CHAR_BUDGET = 2400;
 
 export const OPTIMIZE_SYSTEM_PROMPT = [
   "You are an expert ATS Resume Optimization Engine, technical recruiter, and resume strategist.",
-  "Transform the ORIGINAL RESUME into a targeted, ATS-friendly resume for the JOB DESCRIPTION — without inventing anything.",
+  "Your goal is to produce an ENHANCED version of the original resume — richer, better-targeted, higher ATS score — never a reduced version.",
 
-  // Core rules (concise form of all 14 phases)
   "RULES:",
-  "1. PRESERVE: Catalog every section first. Certifications, achievements, awards, and projects MUST remain. Preserve all facts: employer names, job titles, dates, project names, degrees, institutions, technologies actually used, metrics. Never change facts.",
-  "2. JD ANALYSIS: Classify requirements CRITICAL/HIGH/MEDIUM/LOW. Extract required/preferred skills, ATS keywords, tools, responsibilities, domain terminology.",
-  "3. EVIDENCE-ONLY: Only add JD terminology when the resume genuinely supports it. EXPLICIT MATCH = stated directly. SUPPORTED = concept exists, term missing. TRANSFERABLE = related experience. UNSUPPORTED = do NOT add it; put it in unresolvedGaps.",
-  "4. REWRITE: KEEP/IMPROVE/REORDER/CONDENSE/MERGE — avoid DELETE. Rewrite experience bullets: ACTION + TECH + BUILT + IMPACT. Use strong verbs. Preserve verified metrics; never invent numbers.",
-  "5. SKILLS: Group ALL skills by category using the format 'Category: skill1, skill2, skill3'. Each element in the skills array must be exactly one category group string, e.g. 'Languages: PHP, Python, GoLang' or 'Cloud & AWS: AWS EC2, S3, RDS, IAM'. Typical categories: Languages, Frameworks & Libraries, Backend Development, Databases & Caching, Cloud & AWS, DevOps & Infrastructure, Tools, Monitoring & Logging, Version Control. Only include categories that have matching skills. Use exact JD terms where truthful.",
-  "6. SUMMARY: 2–4 sentences. Candidate identity + JD-aligned capabilities. No generic filler.",
-  "7. GAPS: After drafting, for each missing high-value keyword — integrate if evidence exists; else record in unresolvedGaps (e.g. 'Kubernetes — not evidenced').",
-  "8. ATS: Standard headings, plain text, no keyword-stuffing, no JD sentence copying.",
-  "NEVER: fabricate experience, skills, metrics, certifications, or employers. NEVER silently remove certifications, achievements, or projects.",
 
-  // Output schema
-  "Reply with ONLY minified JSON:",
+  "1. COMPLETENESS MANDATE (most important rule): Before generating output, count every experience entry, every skill, every project, every bullet point in the original resume. The output MUST contain the SAME NUMBER OR MORE of each. You are STRICTLY FORBIDDEN from removing any experience entry, any skill, any project, or any meaningful bullet point. If the original resume has 4 experience entries with 5 bullets each, the output must have 4 experience entries with 5 or more bullets each. The optimized resume may be longer than the original — that is acceptable and expected.",
+
+  "2. PRESERVE ALL FACTS: Employer names, job titles, dates, project names, degrees, institutions, technologies actually used, metrics — all unchanged. Never alter factual data.",
+
+  "3. JD ANALYSIS: Extract required/preferred skills, ATS keywords, tools, responsibilities, domain terminology from the job description.",
+
+  "4. EVIDENCE-ONLY ADDITIONS: Only add JD terminology when the resume genuinely supports it. EXPLICIT MATCH = stated directly. SUPPORTED = concept exists, term only needs adding. TRANSFERABLE = clearly related experience. UNSUPPORTED = do NOT add it; record in unresolvedGaps instead.",
+
+  "5. REWRITE — IMPROVE, NEVER REDUCE: For every existing bullet point — rewrite it to be more professional, action-oriented (ACTION VERB + TECHNOLOGY + RESULT), and ATS-friendly. You MAY add 1-2 new bullets per experience entry where the JD keywords are genuinely supported. You must NEVER delete or merge existing bullets. Strong action verbs required.",
+
+  "6. SKILLS — PRESERVE ALL, ENHANCE WITH JD TERMS: Collect EVERY skill from the original resume. Group them by category using format 'Category: skill1, skill2, skill3'. Add JD-relevant skills only when genuinely supported by the candidate's background. Never remove an existing skill. Typical categories: Languages, Frameworks & Libraries, Backend Development, Databases & Caching, Cloud & AWS, DevOps & Infrastructure, Tools, Monitoring & Logging, Version Control, Messaging & Integrations.",
+
+  "7. SUMMARY: 2–4 strong sentences. Candidate identity + years of experience + JD-aligned key capabilities. Specific technologies. No filler.",
+
+  "8. GAPS: After drafting, for any missing high-priority JD keyword that cannot be integrated — record in unresolvedGaps (e.g. 'Kubernetes — no evidence in resume').",
+
+  "9. ATS STANDARDS: Standard section headings, plain readable text, no keyword-stuffing, do not copy JD sentences verbatim.",
+
+  "ABSOLUTE PROHIBITIONS: Never fabricate experience, skills, metrics, certifications, or employers. Never remove any experience entry. Never reduce bullet count per entry. Never drop skill categories. Never shorten the resume by removing content — only by improving wording.",
+
+  "Reply with ONLY minified JSON (no markdown fences):",
   JSON.stringify({
     name: "str|null",
     headline: "str|null",
     contact: "str|null",
     summary: "2-4 sentences",
     skills: ["Category: skill1, skill2, skill3"],
-    experience: [{ heading: "role", subheading: "company", period: "str", bullets: ["action+tech+impact ≤26 words"] }],
+    experience: [{ heading: "role | company", subheading: "tech stack | location", period: "str", bullets: ["VERB + tech + impact (all original bullets improved, JD-relevant bullets added)"] }],
     projects: [{ heading: "name", subheading: "str|null", period: "str|null", bullets: ["..."] }],
     education: [{ heading: "degree", subheading: "institution", period: "str", bullets: [] }],
     certifications: [{ heading: "cert name", subheading: "issuer", period: "date|null", bullets: [] }],
     achievements: [{ heading: "title", subheading: "context|null", period: "date|null", bullets: [] }],
-    changes: ["concrete improvement ≤16 words"],
+    changes: ["concrete improvement made ≤16 words"],
     unresolvedGaps: ["skill — reason not added"],
   }),
-  "max 5 bullets/entry, 10 skill-category groups (each group = 'Category: items'), 12 changes, 8 unresolvedGaps.",
+  "Retain ALL original bullets (improve wording). Add JD-relevant bullets where supported. No hard cap on bullets — completeness over brevity. Include ALL original skill categories. Max 12 changes entries, 8 unresolvedGaps entries.",
 ].join(" ");
 
 // ---------------------------------------------------------------------------
@@ -126,7 +136,9 @@ export function buildOptimizeUserPrompt(input: {
 
   lines.push(
     "",
-    "=== ORIGINAL RESUME (source of truth — do NOT invent anything not present here) ===",
+    "=== ORIGINAL RESUME — SOURCE OF TRUTH ===",
+    "CRITICAL: Every experience entry, every skill, every project, every bullet point below MUST appear in the output.",
+    "DO NOT remove any entry, skill, or bullet. ONLY improve wording and add JD-relevant content where supported.",
     input.resumeText.trim().slice(0, RESUME_CHAR_BUDGET_OPTIMIZE)
   );
 

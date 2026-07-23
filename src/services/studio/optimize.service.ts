@@ -78,11 +78,10 @@ export async function generateOptimizedResume(input: {
           ? input.targetKeywords
           : input.report?.missingKeywords,
     }),
-    // 2500 tokens: OpenRouter on_demand tier limits each request to 8 000
-    // total tokens (input + max_tokens combined).  With the input budget now
-    // at ~2 500 tokens, 2 500 output tokens keeps the combined total ≈ 5 000,
-    // well within the 8 000 cap and still enough for a complete resume JSON.
-    maxTokens: 2500,
+    // 5 000 output tokens: enough to write a complete, detailed resume JSON
+    // with all experience entries, full skill categories, and improved bullets.
+    // Groq supports large contexts so there is no tight combined-token cap.
+    maxTokens: 5000,
     // Slight creativity produces better rewrites than pure greedy decoding.
     temperature: 0.3,
   });
