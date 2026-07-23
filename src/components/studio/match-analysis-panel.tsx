@@ -2,15 +2,11 @@
 
 import {
   AlertTriangle,
-  BadgeCheck,
-  Briefcase,
   CheckCircle2,
-  GraduationCap,
   Info,
   KeyRound,
   Lightbulb,
   Sparkles,
-  Target,
 } from "lucide-react";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +19,10 @@ import {
 } from "@/components/ui/card";
 import type { InterviewReadiness, MatchReport } from "@/features/studio/types";
 import { cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function scoreColor(score: number): string {
   if (score >= 75) return "text-emerald-600 dark:text-emerald-400";
@@ -48,78 +48,40 @@ const READINESS_LABELS: Record<InterviewReadiness, string> = {
   low: "Low interview readiness",
 };
 
-function SectionHeading({
-  icon: Icon,
-  iconClass,
-  children,
-}: {
-  icon: typeof Target;
-  iconClass: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <h4 className="flex items-center gap-1.5 text-sm font-semibold">
-      <Icon className={cn("size-4 shrink-0", iconClass)} />
-      {children}
-    </h4>
-  );
-}
-
-function ChipList({
-  items,
-  chipClass,
-}: {
-  items: string[];
-  chipClass: string;
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {items.map((item) => (
-        <span
-          key={item}
-          className={cn(
-            "rounded-full px-2.5 py-0.5 text-xs font-medium",
-            chipClass
-          )}
-        >
-          {item}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function BulletList({ items }: { items: string[] }) {
-  return (
-    <ul className="mt-2 space-y-1.5">
-      {items.map((item) => (
-        <li key={item} className="flex gap-2 text-sm text-muted-foreground">
-          <span className="mt-2 size-1 shrink-0 rounded-full bg-muted-foreground/50" />
-          {item}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 type MatchAnalysisPanelProps = {
   report: MatchReport;
-  /** e.g. the resume file name the report was computed from. */
   subtitle?: string;
-  /** Prominent call to action rendered right under the score. */
   cta?: React.ReactNode;
 };
 
 /**
- * The right-hand analysis panel of the job workspace: overall score with
- * an explanation of why, ATS coverage, matched vs missing skills,
- * experience/education alignment, strengths, gaps, and recommendations.
+ * Clean, compact Match Analysis panel.
+ *
+ * Layout:
+ *   • Score block (large %) + readiness badge + explanation
+ *   • CTA (optimize / download)
+ *   • ATS bar — inline percentage, thin bar, missing keywords as small chips
+ *   • Two-column: ✓ Matched  |  ⚠ Gaps
+ *   • Recommendations — compact bullet list, only if gaps exist
  */
 export function MatchAnalysisPanel({
   report,
   subtitle,
   cta,
 }: MatchAnalysisPanelProps) {
+  // Merge missingKeywords + missingSkills, dedupe, take top 6.
+  const allMissing = [
+    ...new Set([...report.missingSkills, ...report.missingKeywords]),
+  ].slice(0, 6);
+
+  // Matched: use matchedSkills (already top-10) but cap to 8 for compactness.
+  const allMatched = report.matchedSkills.slice(0, 8);
+
+  // Recommendations: drop the generic "mirror terminology" filler; keep specific ones.
+  const usefulRecs = report.recommendations
+    .filter((r) => !r.toLowerCase().includes("mirror the posting"))
+    .slice(0, 2);
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -135,8 +97,8 @@ export function MatchAnalysisPanel({
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-5">
-        {/* Overall score */}
+      <CardContent className="space-y-4">
+        {/* ── Score block ── */}
         <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
           <div className="flex items-end justify-between gap-3">
             <div>
@@ -150,9 +112,7 @@ export function MatchAnalysisPanel({
                 )}
               >
                 {report.matchScore}
-                <span className="text-lg font-medium text-muted-foreground">
-                  %
-                </span>
+                <span className="text-lg font-medium text-muted-foreground">%</span>
               </p>
             </div>
             <span
@@ -164,6 +124,7 @@ export function MatchAnalysisPanel({
               {READINESS_LABELS[report.interviewReadiness]}
             </span>
           </div>
+
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
             <div
               className={cn(
@@ -178,127 +139,107 @@ export function MatchAnalysisPanel({
             <div className="mt-3 flex items-start gap-2 rounded-lg bg-muted/50 px-3 py-2.5">
               <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
               <p className="text-xs leading-relaxed text-muted-foreground">
-                <span className="font-semibold text-foreground">
-                  Why this score:
-                </span>{" "}
+                <span className="font-semibold text-foreground">Why this score: </span>
                 {report.scoreExplanation}
               </p>
             </div>
           )}
         </div>
 
+        {/* ── CTA ── */}
         {cta}
 
-        {/* ATS / keyword coverage */}
-        <div>
+        {/* ── ATS bar (compact) ── */}
+        <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <SectionHeading icon={KeyRound} iconClass="text-sky-500">
-              Keywords &amp; ATS coverage
-            </SectionHeading>
-            <span
-              className={cn(
-                "text-sm font-bold tabular-nums",
-                scoreColor(report.atsScore)
-              )}
-            >
+            <span className="flex items-center gap-1.5 text-sm font-semibold">
+              <KeyRound className="size-3.5 text-sky-500" />
+              Keywords &amp; ATS
+            </span>
+            <span className={cn("text-sm font-bold tabular-nums", scoreColor(report.atsScore))}>
               {report.atsScore}%
             </span>
           </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div
-              className={cn(
-                "h-full rounded-full transition-all duration-700",
-                scoreBarColor(report.atsScore)
-              )}
+              className={cn("h-full rounded-full transition-all duration-700", scoreBarColor(report.atsScore))}
               style={{ width: `${report.atsScore}%` }}
             />
           </div>
-          {report.missingKeywords.length > 0 && (
-            <>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Keywords from the posting your resume doesn&apos;t mention yet:
-              </p>
-              <ChipList
-                items={report.missingKeywords}
-                chipClass="bg-sky-500/10 text-sky-700 dark:text-sky-400"
-              />
-            </>
+
+          {/* Missing keywords — small, inline */}
+          {allMissing.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-0.5">
+              {allMissing.map((kw) => (
+                <span
+                  key={kw}
+                  className="rounded-full border border-sky-500/25 bg-sky-500/8 px-2 py-0.5 text-xs text-sky-700 dark:text-sky-400"
+                >
+                  {kw}
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
-        {report.matchedSkills.length > 0 && (
-          <div>
-            <SectionHeading icon={BadgeCheck} iconClass="text-emerald-500">
-              Matched skills
-            </SectionHeading>
-            <ChipList
-              items={report.matchedSkills}
-              chipClass="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-            />
-          </div>
-        )}
-
-        {report.missingSkills.length > 0 && (
-          <div>
-            <SectionHeading icon={AlertTriangle} iconClass="text-amber-500">
-              Missing / important skills
-            </SectionHeading>
-            <ChipList
-              items={report.missingSkills}
-              chipClass="bg-amber-500/10 text-amber-700 dark:text-amber-400"
-            />
-          </div>
-        )}
-
-        {(report.experienceAlignment || report.educationAlignment) && (
-          <div className="space-y-3">
-            {report.experienceAlignment && (
-              <div className="rounded-lg border border-border/60 p-3">
-                <SectionHeading icon={Briefcase} iconClass="text-primary">
-                  Experience alignment
-                </SectionHeading>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  {report.experienceAlignment}
+        {/* ── Matched / Gaps two-column ── */}
+        {(allMatched.length > 0 || allMissing.length > 0) && (
+          <div className="grid grid-cols-2 gap-3">
+            {allMatched.length > 0 && (
+              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                  <CheckCircle2 className="size-3.5" />
+                  Matched
                 </p>
+                <div className="flex flex-wrap gap-1">
+                  {allMatched.map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700 dark:text-emerald-400"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
-            {report.educationAlignment && (
-              <div className="rounded-lg border border-border/60 p-3">
-                <SectionHeading icon={GraduationCap} iconClass="text-primary">
-                  Education alignment
-                </SectionHeading>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  {report.educationAlignment}
+
+            {allMissing.length > 0 && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="size-3.5" />
+                  Gaps
                 </p>
+                <div className="flex flex-wrap gap-1">
+                  {allMissing.map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
         )}
 
-        {report.strengths.length > 0 && (
-          <div>
-            <SectionHeading icon={CheckCircle2} iconClass="text-emerald-500">
-              Strengths
-            </SectionHeading>
-            <BulletList items={report.strengths} />
-          </div>
-        )}
-
-        {report.gaps.length > 0 && (
-          <div>
-            <SectionHeading icon={AlertTriangle} iconClass="text-red-500">
-              Gaps
-            </SectionHeading>
-            <BulletList items={report.gaps} />
-          </div>
-        )}
-
-        {report.recommendations.length > 0 && (
-          <div>
-            <SectionHeading icon={Lightbulb} iconClass="text-primary">
+        {/* ── Recommendations (only when actionable) ── */}
+        {usefulRecs.length > 0 && (
+          <div className="rounded-lg border border-border/50 bg-muted/30 p-3">
+            <p className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-foreground">
+              <Lightbulb className="size-3.5 text-primary" />
               Recommended improvements
-            </SectionHeading>
-            <BulletList items={report.recommendations} />
+            </p>
+            <ul className="space-y-1">
+              {usefulRecs.map((rec) => (
+                <li key={rec} className="flex gap-2 text-xs text-muted-foreground">
+                  <span className="mt-1.5 size-1 shrink-0 rounded-full bg-muted-foreground/50" />
+                  {rec}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </CardContent>
@@ -307,11 +248,7 @@ export function MatchAnalysisPanel({
 }
 
 /** Loading state shown while the AI analyzes the resume. */
-export function MatchAnalysisPanelSkeleton({
-  resumeName,
-}: {
-  resumeName?: string;
-}) {
+export function MatchAnalysisPanelSkeleton({ resumeName }: { resumeName?: string }) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -327,26 +264,37 @@ export function MatchAnalysisPanelSkeleton({
           against this job description.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
+      <CardContent className="space-y-4">
         <div className="rounded-xl border border-border/60 bg-muted/20 p-4">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="mt-2 h-12 w-28" />
           <Skeleton className="mt-3 h-2 w-full rounded-full" />
         </div>
-        {[0, 1, 2].map((section) => (
-          <div key={section} className="space-y-2">
-            <Skeleton className="h-4 w-40" />
-            <div className="flex flex-wrap gap-1.5">
-              <Skeleton className="h-6 w-20 rounded-full" />
-              <Skeleton className="h-6 w-24 rounded-full" />
-              <Skeleton className="h-6 w-16 rounded-full" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-1.5 w-full rounded-full" />
+          <div className="flex gap-1.5">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-5 w-14 rounded-full" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg border border-border/40 p-3 space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <div className="flex flex-wrap gap-1">
+              <Skeleton className="h-5 w-14 rounded-full" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-5 w-12 rounded-full" />
             </div>
           </div>
-        ))}
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="h-3 w-full" />
-          <Skeleton className="h-3 w-5/6" />
+          <div className="rounded-lg border border-border/40 p-3 space-y-2">
+            <Skeleton className="h-3 w-16" />
+            <div className="flex flex-wrap gap-1">
+              <Skeleton className="h-5 w-12 rounded-full" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>

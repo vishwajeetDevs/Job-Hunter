@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -180,6 +180,9 @@ export function JobStudioWorkspace({
   const saveAction = useAsyncAction();
   const rescoreAction = useAsyncAction();
 
+  /** Scroll target — the optimized-resume section revealed after generation. */
+  const optimizedSectionRef = useRef<HTMLElement | null>(null);
+
   const selected = useMemo(
     () => masters.find((master) => master.id === selectedId) ?? masters[0] ?? null,
     [masters, selectedId]
@@ -299,6 +302,13 @@ export function JobStudioWorkspace({
         setDirty(false);
         setActiveTab("preview");
         setJustOptimized(true);
+        // Smooth-scroll to the optimized results so the user sees them immediately.
+        requestAnimationFrame(() => {
+          optimizedSectionRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
       } catch {
         setError("Network error. Please try again.");
       }
@@ -652,7 +662,7 @@ export function JobStudioWorkspace({
 
       {/* Optimization workspace — review, edit, compare, download. */}
       {optimized && (
-        <section className="space-y-4">
+        <section ref={optimizedSectionRef} className="space-y-4">
           {justOptimized && (
             <div className="flex items-start gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 duration-500 animate-in fade-in">
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
