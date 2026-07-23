@@ -34,10 +34,19 @@ export async function createResumeRecord(input: {
   originalFileName: string;
   storageKey: string;
 }) {
+  // Look up the owner's display name so it's stored directly on the row
+  // for easy identification in the Neon console without a JOIN.
+  const owner = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { name: true, email: true },
+  });
+  const userName = owner?.name ?? owner?.email ?? null;
+
   return prisma.resume.create({
     data: {
       id: input.resumeId,
       userId: input.userId,
+      userName,
       originalFileName: input.originalFileName,
       originalFileUrl: input.storageKey,
     },

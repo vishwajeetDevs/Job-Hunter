@@ -61,6 +61,10 @@ model User {
 model Resume {
   id               String     @id @default(cuid())
   userId           String
+  // Denormalized user name for quick identification in the Neon console /
+  // admin queries without a JOIN. Populated at creation time; updated when
+  // the user profile changes and a new resume is saved.
+  userName         String?    @map("user_name")
   type             ResumeType @default(MASTER)
   originalFileName String
   // Storage key of the uploaded file. Null for OPTIMIZED resumes,

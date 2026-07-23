@@ -137,10 +137,19 @@ export async function saveOptimizedResume(input: {
 }) {
   const fileName = `Optimized resume — ${input.jobTitle} @ ${input.jobCompany}`.slice(0, 180);
 
+  // Look up the owner's display name so it's stored directly on the row
+  // for easy identification in the Neon console without a JOIN.
+  const owner = await prisma.user.findUnique({
+    where: { id: input.userId },
+    select: { name: true, email: true },
+  });
+  const userName = owner?.name ?? owner?.email ?? null;
+
   const data = {
     parentResumeId: input.parentResumeId,
     originalFileName: fileName,
     content: input.content as object,
+    userName,
     ...(input.analysis ? { analysis: input.analysis as object } : {}),
   };
 
