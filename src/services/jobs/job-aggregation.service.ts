@@ -8,6 +8,18 @@ import type {
 } from "@/services/jobs/aggregation/types";
 import { enrichNormalizedJob } from "@/services/jobs/enrichment/enrich-job";
 
+/** Compact record of a job stored during a run, kept in the cron log. */
+export type InsertedJobSummary = {
+  source: string;
+  title: string;
+  company: string;
+  location: string | null;
+  url: string | null;
+  postedAt: string | null;
+  /** Short description preview — full text lives on the jobs table. */
+  description: string | null;
+};
+
 export type JobIngestionResult = {
   source: JobSourceId;
   companyToken: string;
@@ -18,6 +30,8 @@ export type JobIngestionResult = {
   skipped: number;
   /** Wall-clock time spent fetching + persisting this source. */
   durationMs: number;
+  /** The new jobs this run added from this source. */
+  insertedJobs: InsertedJobSummary[];
   error?: string;
 };
 
@@ -49,14 +63,23 @@ function capDescription(description: string | null | undefined): string | null {
  * fetched one are updated in place — this heals rows saved under the
  * old 6k description cap without rewriting every row on every refresh.
  */
+const LOG_DESCRIPTION_PREVIEW = 200;
+
 export async function upsertNormalizedJobs(
   jobs: NormalizedJob[]
-): Promise<{ inserted: number; updated: number; skipped: number }> {
+): Promise<{
+  inserted: number;
+  updated: number;
+  skipped: number;
+  insertedJobs: InsertedJobSummary[];
+}> {
   if (jobs.length === 0) {
-    return { inserted: 0, updated: 0, skipped: 0 };
+    return { inserted: 0, updated: 0, skipped: 0, insertedJobs: [] };
   }
 
-  const result = await prisma.job.createMany({
+  // createManyAndReturn (Postgres) reports exactly which rows were new,
+  // so the cron log can list the jobs each run added.
+  const created = await prisma.job.createManyAndReturn({
     data: jobs.map((job) => {
       const enrichment = enrichNormalizedJob(job);
 
@@ -72,13 +95,36 @@ export async function upsertNormalizedJobs(
         ...enrichment,
       };
     }),
+    select: {
+      source: true,
+      title: true,
+      company: true,
+      location: true,
+      jobUrl: true,
+      postedAt: true,
+      description: true,
+    },
     skipDuplicates: true,
   });
 
-  const skipped = jobs.length - result.count;
+  const skipped = jobs.length - created.length;
   const updated = skipped > 0 ? await refreshTruncatedDescriptions(jobs) : 0;
 
-  return { inserted: result.count, updated, skipped };
+  const insertedJobs: InsertedJobSummary[] = created.map((job) => ({
+    source: job.source ?? "unknown",
+    title: job.title,
+    company: job.company,
+    location: job.location,
+    url: job.jobUrl,
+    postedAt: job.postedAt?.toISOString() ?? null,
+    description: job.description
+      ? job.description.length > LOG_DESCRIPTION_PREVIEW
+        ? `${job.description.slice(0, LOG_DESCRIPTION_PREVIEW).trimEnd()}…`
+        : job.description
+      : null,
+  }));
+
+  return { inserted: created.length, updated, skipped, insertedJobs };
 }
 
 /**
@@ -132,8 +178,9 @@ export async function ingestJobsFromSource(
   const adapter = getJobSourceAdapter(source);
   const startedAt = Date.now();
 
-  // Keyed sources (adzuna/jsearch) are optional — skip quietly until
-  // their API keys are set instead of failing every refresh.
+  // Keyed sources are skipped when their API keys are missing, but the
+  // skip is recorded as a source error so the cron log makes missing
+  // production env vars visible instead of hiding them as "success".
   if (adapter.isConfigured && !adapter.isConfigured()) {
     console.warn(
       `[ingestJobsFromSource] Skipping ${source}:${options.companyToken} — API keys not configured.`
@@ -146,12 +193,15 @@ export async function ingestJobsFromSource(
       updated: 0,
       skipped: 0,
       durationMs: 0,
+      insertedJobs: [],
+      error: `${source} is not configured — API keys missing.`,
     };
   }
 
   try {
     const jobs = await adapter.fetchJobs(options);
-    const { inserted, updated, skipped } = await upsertNormalizedJobs(jobs);
+    const { inserted, updated, skipped, insertedJobs } =
+      await upsertNormalizedJobs(jobs);
 
     return {
       source,
@@ -161,6 +211,7 @@ export async function ingestJobsFromSource(
       updated,
       skipped,
       durationMs: Date.now() - startedAt,
+      insertedJobs,
     };
   } catch (error) {
     const message =
@@ -178,6 +229,7 @@ export async function ingestJobsFromSource(
       updated: 0,
       skipped: 0,
       durationMs: Date.now() - startedAt,
+      insertedJobs: [],
       error: message,
     };
   }

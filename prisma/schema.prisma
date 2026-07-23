@@ -159,33 +159,19 @@ enum CronRunStatus {
 // Complete history of every jobs-refresh execution (cron or manual).
 // One row per run; rows are never deleted so past runs stay available
 // for monitoring, debugging, and historical analysis.
+//
+// Deliberately minimal: everything about the run lives in the `log`
+// JSONB — { triggeredBy, startedAt, completedAt, durationMs,
+//   sources: [{ source, target, status, fetched, inserted, updated,
+//     skipped, durationMs, error? }],
+//   data: { totalSources, successfulSources, failedSources, fetched,
+//     inserted, updated, skipped, deleted, insertedJobs: [...],
+//     errors: string[] } }
 model CronExecutionLog {
-  id          String        @id @default(cuid())
-  // "cron" for scheduled runs; other labels for manual/backfill runs.
-  triggeredBy String        @default("cron")
-  status      CronRunStatus @default(RUNNING)
+  id     String        @id @default(cuid())
+  status CronRunStatus @default(RUNNING)
+  log    Json?
 
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
-  durationMs  Int?
-
-  totalSources      Int @default(0)
-  successfulSources Int @default(0)
-  failedSources     Int @default(0)
-
-  // Aggregate record counts across all sources for this run.
-  fetched  Int @default(0)
-  inserted Int @default(0)
-  updated  Int @default(0)
-  skipped  Int @default(0)
-  deleted  Int @default(0)
-
-  // Source-wise breakdown and errors:
-  // { sources: [{ source, target, status, fetched, inserted, updated,
-  //   skipped, durationMs, error? }], errors: string[] }
-  details Json?
-
-  @@index([startedAt])
   @@map("cron_execution_logs")
 }
 

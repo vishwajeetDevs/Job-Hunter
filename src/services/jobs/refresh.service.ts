@@ -41,7 +41,7 @@ export type RefreshRunSummary = {
   durationMs: number;
 };
 
-/** Per-source entry stored in CronExecutionLog.details.sources. */
+/** Per-source entry stored in the cron log's `sources` array. */
 type SourceLogEntry = {
   source: string;
   target: string;
@@ -80,14 +80,17 @@ export type RefreshStatus = {
 
 /** Last recorded ingestion run + next scheduled run, for the jobs page UI. */
 export async function getRefreshStatus(): Promise<RefreshStatus> {
-  const lastRun = await prisma.cronExecutionLog.findFirst({
-    where: { completedAt: { not: null }, status: { not: "FAILED" } },
-    orderBy: { startedAt: "desc" },
-    select: { startedAt: true },
-  });
+  // startedAt lives inside the log JSON; ISO strings sort correctly.
+  const rows = await prisma.$queryRaw<{ startedAt: string | null }[]>`
+    SELECT log->>'startedAt' AS "startedAt"
+    FROM cron_execution_logs
+    WHERE status::text IN ('SUCCESS', 'PARTIAL_SUCCESS')
+      AND log->>'startedAt' IS NOT NULL
+    ORDER BY log->>'startedAt' DESC
+    LIMIT 1`;
 
   return {
-    lastRefreshAt: lastRun?.startedAt.toISOString() ?? null,
+    lastRefreshAt: rows[0]?.startedAt ?? null,
     nextRefreshAt: getNextRefreshAt().toISOString(),
   };
 }
@@ -130,11 +133,18 @@ export async function runJobsRefresh(
   triggeredBy: string
 ): Promise<RefreshRunSummary> {
   const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
 
   // Claim the log row first so overlapping or crashed invocations are
   // still visible in the history (a stale RUNNING row = crashed run).
   const run = await prisma.cronExecutionLog.create({
-    data: { triggeredBy, totalSources: TRACKED_COMPANIES.length },
+    data: {
+      log: {
+        triggeredBy,
+        startedAt: startedAtIso,
+        data: { totalSources: TRACKED_COMPANIES.length },
+      },
+    },
     select: { id: true },
   });
 
@@ -197,22 +207,33 @@ export async function runJobsRefresh(
       .filter((result) => result.error)
       .map((result) => `${result.source}:${result.companyToken} — ${result.error}`);
 
+    const insertedJobs = results.flatMap((result) => result.insertedJobs);
+
     // Finalize the log row; a logging failure must not fail the refresh.
     try {
       await prisma.cronExecutionLog.update({
         where: { id: run.id },
         data: {
           status,
-          completedAt: new Date(),
-          durationMs,
-          successfulSources: results.length - failedSources.length,
-          failedSources: failedSources.length,
-          fetched: summary.fetched,
-          inserted: summary.inserted,
-          updated: summary.updated,
-          skipped: summary.skipped,
-          deleted,
-          details: { sources, errors },
+          log: {
+            triggeredBy,
+            startedAt: startedAtIso,
+            completedAt: new Date().toISOString(),
+            durationMs,
+            sources,
+            data: {
+              totalSources: results.length,
+              successfulSources: results.length - failedSources.length,
+              failedSources: failedSources.length,
+              fetched: summary.fetched,
+              inserted: summary.inserted,
+              updated: summary.updated,
+              skipped: summary.skipped,
+              deleted,
+              insertedJobs,
+              errors,
+            },
+          },
         },
       });
     } catch (error) {
@@ -238,11 +259,16 @@ export async function runJobsRefresh(
         where: { id: run.id },
         data: {
           status: "FAILED",
-          completedAt: new Date(),
-          durationMs: Date.now() - startedAt,
-          details: {
+          log: {
+            triggeredBy,
+            startedAt: startedAtIso,
+            completedAt: new Date().toISOString(),
+            durationMs: Date.now() - startedAt,
             sources: [],
-            errors: [error instanceof Error ? error.message : String(error)],
+            data: {
+              totalSources: TRACKED_COMPANIES.length,
+              errors: [error instanceof Error ? error.message : String(error)],
+            },
           },
         },
       });
