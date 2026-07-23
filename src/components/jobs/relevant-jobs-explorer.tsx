@@ -10,6 +10,7 @@ import {
 import { FileText, Loader2, Plus, Sparkles, X } from "lucide-react";
 
 import { JobCard } from "@/components/jobs/job-card";
+import { BACK_HREF_KEY } from "@/components/jobs/jobs-filter-persistence";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,6 +63,69 @@ export function RelevantJobsExplorer({
   const loadingRef = useRef(false);
   // Discards responses from superseded re-rank requests (keyword spam etc.).
   const requestRef = useRef(0);
+
+  // ── Back-href & scroll/page persistence (mirrors JobsInfiniteList) ───────
+  const SESSION_KEY = `jh-list:relevant:${resumeId}`;
+
+  // Restore jobs + page from sessionStorage on mount, then scroll to saved Y.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(SESSION_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        jobs?: unknown;
+        page?: unknown;
+        scrollY?: unknown;
+      };
+      if (!Array.isArray(saved.jobs) || saved.jobs.length === 0) return;
+      setJobs(saved.jobs as JobListItem[]);
+      setPage(typeof saved.page === "number" ? saved.page : 1);
+      const y = typeof saved.scrollY === "number" ? saved.scrollY : 0;
+      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo({ top: y })));
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount-only
+
+  // Persist jobs + page whenever they change (merge to preserve scrollY).
+  useEffect(() => {
+    try {
+      const existing = sessionStorage.getItem(SESSION_KEY);
+      const prev = existing ? (JSON.parse(existing) as object) : {};
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...prev, jobs, page }));
+    } catch {}
+  }, [SESSION_KEY, jobs, page]);
+
+  // Persist scroll position (debounced).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onScroll = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          const existing = sessionStorage.getItem(SESSION_KEY);
+          if (!existing) return;
+          const prev = JSON.parse(existing) as object;
+          sessionStorage.setItem(SESSION_KEY, JSON.stringify({ ...prev, scrollY: window.scrollY }));
+        } catch {}
+      }, 200);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (timer) clearTimeout(timer);
+    };
+  }, [SESSION_KEY]);
+
+  // Write the "back href" so BackToJobsLink returns to this view.
+  // Updated whenever the selected resume changes.
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        BACK_HREF_KEY,
+        `/dashboard/jobs?view=relevant&resume=${resumeId}`
+      );
+    } catch {}
+  }, [resumeId]);
 
   const hasMore = jobs.length < totalCount;
 

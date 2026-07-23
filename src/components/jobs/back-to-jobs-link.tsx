@@ -4,31 +4,45 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+import { BACK_HREF_KEY } from "@/components/jobs/jobs-filter-persistence";
+
 /**
- * Must stay in sync with the key used in jobs-filter-persistence.tsx so we
- * always read the filters that were active when the user left the list.
+ * Fallback key used by JobsFilterPersistence (localStorage) when no
+ * sessionStorage back-href is available (e.g. opened in a new tab).
  */
 const FILTER_STORAGE_KEY = "job-hunter:jobs-filters";
 
 /**
- * A "Back to Jobs" link that restores the exact filter URL the user was
- * browsing before they opened a job detail page.
+ * A "Back to Jobs" link that returns the user to the exact view and position
+ * they came from — whether that was All Jobs or Relevant/Resume-Matched Jobs.
  *
- * On mount it reads the saved filter query from localStorage and builds the
- * correct href, eliminating the extra redirect that the filter-persistence
- * component would otherwise produce.
+ * Priority:
+ * 1. sessionStorage["jh-jobs-back-href"] — set by whichever jobs-list view
+ *    the user was on (All Jobs via JobsFilterPersistence, Relevant Jobs via
+ *    RelevantJobsExplorer). This correctly handles the view=relevant case.
+ * 2. localStorage["job-hunter:jobs-filters"] — legacy fallback for users who
+ *    opened the job in a new tab (no sessionStorage) but have saved filters.
+ * 3. /dashboard/jobs — safe default.
  */
 export function BackToJobsLink() {
   const [href, setHref] = useState("/dashboard/jobs");
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(FILTER_STORAGE_KEY);
-      if (saved) {
-        setHref(`/dashboard/jobs?${saved}`);
+      // Prefer the full back-href saved in sessionStorage (covers both views).
+      const backHref = window.sessionStorage.getItem(BACK_HREF_KEY);
+      if (backHref) {
+        setHref(backHref);
+        return;
+      }
+
+      // Fallback: reconstruct All Jobs URL from the saved filter query.
+      const savedFilters = window.localStorage.getItem(FILTER_STORAGE_KEY);
+      if (savedFilters) {
+        setHref(`/dashboard/jobs?${savedFilters}`);
       }
     } catch {
-      // localStorage may be unavailable in certain private-browsing modes
+      // Storage APIs may be unavailable in certain private-browsing modes.
     }
   }, []);
 
