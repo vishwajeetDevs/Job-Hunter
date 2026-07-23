@@ -190,13 +190,12 @@ export async function POST(request: Request) {
     }
 
     if (error instanceof AiProviderError) {
-      // The upstream AI API returned an error (rate limit, quota, bad key, etc.)
+      // The upstream AI API returned an error (rate limit, quota, bad key,
+      // max_tokens > model limit, etc.). Log the full provider message so the
+      // Vercel function logs explain the root cause.
       console.error("[POST /api/studio/optimize] AI provider error:", error.message);
       return NextResponse.json(
-        {
-          error:
-            "The AI service returned an error. Please try again in a moment — if the issue persists, the AI provider may be temporarily unavailable.",
-        },
+        { error: `AI provider error: ${error.message}` },
         { status: 503 }
       );
     }

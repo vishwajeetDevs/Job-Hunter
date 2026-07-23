@@ -78,11 +78,12 @@ export async function generateOptimizedResume(input: {
           ? input.targetKeywords
           : input.report?.missingKeywords,
     }),
-    // 4500 tokens: the expanded schema (certifications, achievements,
-    // unresolvedGaps) + a full resume body routinely exceeds 3200 tokens.
-    // Truncated JSON causes a SyntaxError and a downstream 500 — give the
-    // model enough headroom so the JSON always closes cleanly.
-    maxTokens: 4500,
+    // 4000 tokens: stays within the 4096-token output cap common to
+    // GPT-3.5-turbo, most Groq and OpenRouter models. Requesting more than
+    // the model's hard limit triggers a 400 from the provider → AiProviderError.
+    // 4000 is enough headroom for the expanded schema (certifications,
+    // achievements, unresolvedGaps) + full resume body without truncation.
+    maxTokens: 4000,
     // Slight creativity produces better rewrites than pure greedy decoding.
     temperature: 0.3,
   });
