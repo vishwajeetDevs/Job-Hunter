@@ -769,14 +769,14 @@ export function JobStudioWorkspace({
           </div>
 
           {/* Tab bar */}
-          <div className="inline-flex w-fit items-center gap-1 rounded-lg border border-border/60 bg-muted/40 p-1">
+          <div className="flex w-full items-center gap-1 rounded-lg border border-border/60 bg-muted/40 p-1">
             {WORKSPACE_TABS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setActiveTab(id)}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  "inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
                   activeTab === id
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
