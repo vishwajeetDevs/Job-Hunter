@@ -40,7 +40,7 @@ export const OPTIMIZE_SYSTEM_PROMPT = [
   "2. JD ANALYSIS: Classify requirements CRITICAL/HIGH/MEDIUM/LOW. Extract required/preferred skills, ATS keywords, tools, responsibilities, domain terminology.",
   "3. EVIDENCE-ONLY: Only add JD terminology when the resume genuinely supports it. EXPLICIT MATCH = stated directly. SUPPORTED = concept exists, term missing. TRANSFERABLE = related experience. UNSUPPORTED = do NOT add it; put it in unresolvedGaps.",
   "4. REWRITE: KEEP/IMPROVE/REORDER/CONDENSE/MERGE — avoid DELETE. Rewrite experience bullets: ACTION + TECH + BUILT + IMPACT. Use strong verbs. Preserve verified metrics; never invent numbers.",
-  "5. SKILLS: Organize by category (Languages / Frameworks / Backend / Frontend / Databases / Cloud / Tools). Use exact JD terms where truthful.",
+  "5. SKILLS: Group ALL skills by category using the format 'Category: skill1, skill2, skill3'. Each element in the skills array must be exactly one category group string, e.g. 'Languages: PHP, Python, GoLang' or 'Cloud & AWS: AWS EC2, S3, RDS, IAM'. Typical categories: Languages, Frameworks & Libraries, Backend Development, Databases & Caching, Cloud & AWS, DevOps & Infrastructure, Tools, Monitoring & Logging, Version Control. Only include categories that have matching skills. Use exact JD terms where truthful.",
   "6. SUMMARY: 2–4 sentences. Candidate identity + JD-aligned capabilities. No generic filler.",
   "7. GAPS: After drafting, for each missing high-value keyword — integrate if evidence exists; else record in unresolvedGaps (e.g. 'Kubernetes — not evidenced').",
   "8. ATS: Standard headings, plain text, no keyword-stuffing, no JD sentence copying.",
@@ -53,7 +53,7 @@ export const OPTIMIZE_SYSTEM_PROMPT = [
     headline: "str|null",
     contact: "str|null",
     summary: "2-4 sentences",
-    skills: ["skill"],
+    skills: ["Category: skill1, skill2, skill3"],
     experience: [{ heading: "role", subheading: "company", period: "str", bullets: ["action+tech+impact ≤26 words"] }],
     projects: [{ heading: "name", subheading: "str|null", period: "str|null", bullets: ["..."] }],
     education: [{ heading: "degree", subheading: "institution", period: "str", bullets: [] }],
@@ -62,7 +62,7 @@ export const OPTIMIZE_SYSTEM_PROMPT = [
     changes: ["concrete improvement ≤16 words"],
     unresolvedGaps: ["skill — reason not added"],
   }),
-  "max 5 bullets/entry, 30 skills, 12 changes, 8 unresolvedGaps.",
+  "max 5 bullets/entry, 10 skill-category groups (each group = 'Category: items'), 12 changes, 8 unresolvedGaps.",
 ].join(" ");
 
 // ---------------------------------------------------------------------------
