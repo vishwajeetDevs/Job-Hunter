@@ -190,10 +190,21 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof OptimizeError) {
+      // Optimization-specific failure (bad AI output, score regression, etc.)
+      // Return 422 so the client can surface the exact reason to the user.
       return NextResponse.json({ error: error.message }, { status: 422 });
     }
 
-    console.error("[POST /api/studio/optimize]", error);
+    // Unexpected error — log as much detail as possible so Vercel logs explain
+    // what happened (avoids opaque "Failed to generate" with no context).
+    const message = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
+    console.error("[POST /api/studio/optimize] unexpected error:", {
+      message,
+      stack,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
+
     return NextResponse.json(
       { error: "Failed to generate the optimized resume." },
       { status: 500 }

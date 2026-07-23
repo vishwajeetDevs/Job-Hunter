@@ -17,6 +17,19 @@ export class OptimizeError extends Error {
 }
 
 /**
+ * Extracts raw JSON from an AI response that may be wrapped in markdown
+ * code fences (```json ... ```) or have surrounding whitespace.
+ * Returns the trimmed string unchanged if no fences are detected.
+ */
+function extractJson(raw: string): string {
+  const trimmed = raw.trim();
+  // Strip ```json ... ``` or ``` ... ``` wrappers
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)```\s*$/i);
+  if (fenceMatch?.[1]) return fenceMatch[1].trim();
+  return trimmed;
+}
+
+/**
  * Generates an ATS-optimized version of the master resume for a job.
  * Pure generation — persistence lives in studio.service.ts.
  */
@@ -65,14 +78,37 @@ export async function generateOptimizedResume(input: {
           ? input.targetKeywords
           : input.report?.missingKeywords,
     }),
-    maxTokens: 3200,
+    // 4500 tokens: the expanded schema (certifications, achievements,
+    // unresolvedGaps) + a full resume body routinely exceeds 3200 tokens.
+    // Truncated JSON causes a SyntaxError and a downstream 500 — give the
+    // model enough headroom so the JSON always closes cleanly.
+    maxTokens: 4500,
     // Slight creativity produces better rewrites than pure greedy decoding.
     temperature: 0.3,
   });
 
-  const content = normalizeOptimizedResumeContent(JSON.parse(raw), input.version);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(extractJson(raw));
+  } catch (parseErr) {
+    // Log the truncated/malformed raw output so the server logs explain why.
+    console.error(
+      "[optimize] JSON parse failed — raw AI output (first 500 chars):",
+      raw.slice(0, 500),
+      parseErr
+    );
+    throw new OptimizeError(
+      "The AI returned malformed output. Please try regenerating."
+    );
+  }
+
+  const content = normalizeOptimizedResumeContent(parsed, input.version);
 
   if (!content) {
+    console.error(
+      "[optimize] normalizeOptimizedResumeContent returned null — parsed object:",
+      JSON.stringify(parsed).slice(0, 500)
+    );
     throw new OptimizeError(
       "The AI returned an unusable resume. Please try regenerating."
     );
