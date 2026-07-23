@@ -41,18 +41,11 @@ export type RefreshRunSummary = {
   durationMs: number;
 };
 
-/** Per-source entry stored in the cron log's `sources` array. */
-type SourceLogEntry = {
-  source: string;
-  target: string;
-  status: "success" | "failed";
-  fetched: number;
-  inserted: number;
-  updated: number;
-  skipped: number;
-  durationMs: number;
-  error?: string;
-};
+/**
+ * The cron log's `sources` object: source name → total jobs fetched
+ * from that source this run (targets of the same source are summed).
+ */
+type SourcesLog = Record<string, number>;
 
 /**
  * Next scheduled run strictly after `now`, derived from the anchor hour
@@ -140,8 +133,9 @@ export async function runJobsRefresh(
   const run = await prisma.cronExecutionLog.create({
     data: {
       log: {
-        triggeredBy,
         startedAt: startedAtIso,
+        triggeredBy,
+        sources: {},
         data: { totalSources: TRACKED_COMPANIES.length },
       },
     },
@@ -191,17 +185,12 @@ export async function runJobsRefresh(
           ? "FAILED"
           : "PARTIAL_SUCCESS";
 
-    const sources: SourceLogEntry[] = results.map((result) => ({
-      source: result.source,
-      target: result.companyToken,
-      status: result.error ? "failed" : "success",
-      fetched: result.fetched,
-      inserted: result.inserted,
-      updated: result.updated,
-      skipped: result.skipped,
-      durationMs: result.durationMs,
-      ...(result.error ? { error: result.error } : {}),
-    }));
+    // Simple source → fetched-count map; per-target failures stay in
+    // data.errors so the object holds nothing but counts.
+    const sources: SourcesLog = {};
+    for (const result of results) {
+      sources[result.source] = (sources[result.source] ?? 0) + result.fetched;
+    }
 
     const errors = results
       .filter((result) => result.error)
@@ -216,10 +205,10 @@ export async function runJobsRefresh(
         data: {
           status,
           log: {
-            triggeredBy,
             startedAt: startedAtIso,
-            completedAt: new Date().toISOString(),
             durationMs,
+            completedAt: new Date().toISOString(),
+            triggeredBy,
             sources,
             data: {
               totalSources: results.length,
@@ -260,11 +249,11 @@ export async function runJobsRefresh(
         data: {
           status: "FAILED",
           log: {
-            triggeredBy,
             startedAt: startedAtIso,
-            completedAt: new Date().toISOString(),
             durationMs: Date.now() - startedAt,
-            sources: [],
+            completedAt: new Date().toISOString(),
+            triggeredBy,
+            sources: {},
             data: {
               totalSources: TRACKED_COMPANIES.length,
               errors: [error instanceof Error ? error.message : String(error)],
