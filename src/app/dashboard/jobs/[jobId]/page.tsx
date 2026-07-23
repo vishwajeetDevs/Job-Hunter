@@ -14,6 +14,7 @@ import { normalizeParsedResumeData } from "@/features/resume/types";
 import { optimizedContentToText } from "@/features/studio/serialize";
 import { normalizeOptimizedResumeContent } from "@/features/studio/types";
 import { requireAuth } from "@/lib/auth/require-auth";
+import { isSnippetOnlySource } from "@/services/jobs/aggregation/types";
 import { buildMatchReport } from "@/services/studio/analyze.service";
 import {
   ensureResumeRawText,
@@ -36,7 +37,13 @@ function formatPostedAt(date: Date): string {
   }).format(date);
 }
 
-function looksTruncated(description: string): boolean {
+/**
+ * True when the stored description is only a preview of the original
+ * posting: either the source's API never returns the full text
+ * (Careerjet/Adzuna/Jooble snippets) or the text was visibly cut.
+ */
+function looksTruncated(description: string, source: string | null): boolean {
+  if (isSnippetOnlySource(source)) return true;
   const trimmed = description.trimEnd();
   return trimmed.endsWith("…") || trimmed.endsWith("...");
 }
@@ -61,7 +68,7 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
 
   const optimizedContent = normalizeOptimizedResumeContent(optimizedRow?.content, 1);
   const descriptionLooksTruncated = job.description
-    ? looksTruncated(job.description)
+    ? looksTruncated(job.description, job.source)
     : false;
 
   // Recompute before/after reports with the centralized Match Score Engine

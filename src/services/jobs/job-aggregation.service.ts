@@ -21,14 +21,29 @@ export type JobIngestionTarget = JobFetchOptions & {
   source: JobSourceId;
 };
 
-/** Boards can return very long HTML-derived descriptions; cap stored size. */
-const MAX_DESCRIPTION_LENGTH = 6000;
+/**
+ * Safety cap for pathological payloads only — real postings (even long
+ * Greenhouse/Ashby ones) stay well under this, so full descriptions are
+ * stored intact. A trailing ellipsis marks the rare capped row so the UI
+ * can point users at the original posting.
+ */
+const MAX_DESCRIPTION_LENGTH = 30000;
+
+function capDescription(description: string | null | undefined): string | null {
+  if (!description) return null;
+  if (description.length <= MAX_DESCRIPTION_LENGTH) return description;
+  return `${description.slice(0, MAX_DESCRIPTION_LENGTH).trimEnd()}…`;
+}
 
 /**
  * Persists normalized jobs in a single batched insert.
  * Duplicates are prevented by the `@@unique([source, externalId])`
  * constraint on the Job model — existing rows are skipped, which keeps
  * a full refresh (thousands of jobs) to one query per board.
+ *
+ * Existing rows whose stored description is shorter than the freshly
+ * fetched one are updated in place — this heals rows saved under the
+ * old 6k description cap without rewriting every row on every refresh.
  */
 export async function upsertNormalizedJobs(
   jobs: NormalizedJob[]
@@ -45,7 +60,7 @@ export async function upsertNormalizedJobs(
         title: job.title,
         company: job.company,
         location: job.location,
-        description: job.description?.slice(0, MAX_DESCRIPTION_LENGTH) ?? null,
+        description: capDescription(job.description),
         jobUrl: job.url,
         postedAt: job.postedAt,
         source: job.source,
@@ -56,7 +71,54 @@ export async function upsertNormalizedJobs(
     skipDuplicates: true,
   });
 
-  return { inserted: result.count, skipped: jobs.length - result.count };
+  const skipped = jobs.length - result.count;
+  if (skipped > 0) {
+    await refreshTruncatedDescriptions(jobs);
+  }
+
+  return { inserted: result.count, skipped };
+}
+
+/**
+ * Updates descriptions of already-stored jobs when the source now
+ * provides meaningfully more text than what we have (rows ingested
+ * under the old, smaller description cap). No-ops once healed.
+ */
+async function refreshTruncatedDescriptions(jobs: NormalizedJob[]): Promise<void> {
+  const byKey = new Map(
+    jobs.map((job) => [`${job.source}\u0000${job.externalId}`, job])
+  );
+
+  const existing = await prisma.job.findMany({
+    where: {
+      source: jobs[0].source,
+      externalId: { in: jobs.map((job) => job.externalId) },
+    },
+    select: { id: true, source: true, externalId: true, description: true },
+  });
+
+  const updates = existing.flatMap((row) => {
+    const fetched = byKey.get(`${row.source}\u0000${row.externalId}`);
+    const next = capDescription(fetched?.description);
+    if (!next) return [];
+
+    const storedLength = row.description?.length ?? 0;
+    // Only rewrite when the new text is meaningfully longer — avoids
+    // thousands of no-op updates on every refresh.
+    if (next.length <= storedLength + 50) return [];
+
+    return prisma.job.update({
+      where: { id: row.id },
+      data: { description: next },
+    });
+  });
+
+  if (updates.length > 0) {
+    await Promise.all(updates);
+    console.log(
+      `[refreshTruncatedDescriptions] healed ${updates.length} ${jobs[0].source} descriptions`
+    );
+  }
 }
 
 /**

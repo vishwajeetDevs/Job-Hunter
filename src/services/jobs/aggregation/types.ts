@@ -19,6 +19,22 @@ export function isJobSourceId(value: string): value is JobSourceId {
   return (JOB_SOURCES as readonly string[]).includes(value);
 }
 
+/**
+ * Sources whose APIs only ever return a short description fragment
+ * (verified against the live APIs — no parameter unlocks the full text).
+ * The complete description exists only on the original posting page, so
+ * the UI shows a "view the original posting" note for these.
+ */
+const SNIPPET_ONLY_SOURCES: ReadonlySet<string> = new Set([
+  "careerjet",
+  "adzuna",
+  "jooble",
+]);
+
+export function isSnippetOnlySource(source: string | null | undefined): boolean {
+  return source ? SNIPPET_ONLY_SOURCES.has(source) : false;
+}
+
 /** Display-name variants → canonical source id for board search. */
 const SOURCE_QUERY_ALIASES: Record<string, JobSourceId> = {
   "career jet": "careerjet",
