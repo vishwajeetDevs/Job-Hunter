@@ -6,12 +6,13 @@ import { computeMatchScore } from "@/services/match/match-score.service";
 import { getResumeWithTextForUser } from "@/services/resumes/resume.service";
 import { ensureResumeRawText } from "@/services/studio/studio.service";
 import { ensureDbUser } from "@/services/users/ensure-user";
+import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
 
 const MAX_JOB_DESCRIPTION_LENGTH = 20_000;
 
-export async function POST(request: Request) {
+async function handler(request: Request) {
   try {
     const { userId: clerkUserId } = await auth();
 
@@ -69,3 +70,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withApiLogger(handler);

@@ -5,6 +5,7 @@ import { isResumeExportFormat } from "@/services/studio/exporters/exporter.inter
 import { getResumeExporter } from "@/services/studio/exporters";
 import { getOptimizedResumeById } from "@/services/studio/studio.service";
 import { getDbUserByClerkId } from "@/services/users/ensure-user";
+import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,7 @@ function sanitizeDownloadName(name: string): string {
   return name.replace(/[^a-zA-Z0-9 _.-]/g, "").trim() || "optimized-resume";
 }
 
-export async function GET(request: Request, context: RouteContext) {
+async function handler(request: Request, context: RouteContext) {
   try {
     const { userId: clerkUserId } = await auth();
 
@@ -81,3 +82,5 @@ export async function GET(request: Request, context: RouteContext) {
     return new Response("Export failed.", { status: 500 });
   }
 }
+
+export const GET = withApiLogger(handler);

@@ -5,10 +5,11 @@ import { serializeResumeListItem } from "@/features/resume/utils";
 import { validateResumeFile } from "@/lib/resume/validation";
 import { saveUploadedResume } from "@/services/resumes/resume.service";
 import { ensureDbUser } from "@/services/users/ensure-user";
+import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request) {
+async function handler(request: Request) {
   try {
     const { userId: clerkUserId } = await auth();
 
@@ -48,3 +49,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withApiLogger(handler);

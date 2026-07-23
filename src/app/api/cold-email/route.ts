@@ -5,12 +5,13 @@ import { normalizeParsedResumeData } from "@/features/resume/types";
 import { generateColdEmail } from "@/services/outreach/cold-email.service";
 import { getResumeForUser } from "@/services/resumes/resume.service";
 import { ensureDbUser } from "@/services/users/ensure-user";
+import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
 
 const MAX_FIELD_LENGTH = 200;
 
-export async function POST(request: Request) {
+async function handler(request: Request) {
   try {
     const { userId: clerkUserId } = await auth();
 
@@ -82,3 +83,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withApiLogger(handler);

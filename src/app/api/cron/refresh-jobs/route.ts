@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { runJobsRefresh } from "@/services/jobs/refresh.service";
+import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export const maxDuration = 300;
  * Local/manual trigger:
  *   curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/refresh-jobs
  */
-export async function GET(request: Request) {
+async function handler(request: Request) {
   const secret = process.env.CRON_SECRET;
 
   if (!secret) {
@@ -51,3 +52,5 @@ export async function GET(request: Request) {
     );
   }
 }
+
+export const GET = withApiLogger(handler);

@@ -178,6 +178,36 @@ model CronExecutionLog {
   @@map("tbl_cron_execution_logs")
 }
 
+// Logs every API request for activity tracking and debugging.
+// Rows are append-only — never modified after creation.
+model ApiRequestLog {
+  id            String   @id @default(cuid())
+  // Internal DB user id (null for unauthenticated / system calls).
+  userId        String?  @map("user_id")
+  // Display name at the time of the call.
+  userName      String?  @map("name")
+  // HTTP verb: GET, POST, …
+  method        String
+  // URL pathname: /api/studio/optimize
+  api           String
+  // Sanitised request body (JSON routes only; null for GET / multipart).
+  request       Json?
+  // Sanitised response body (JSON routes only; null for binary responses).
+  response      Json?
+  // HTTP response status code.
+  statusCode    Int?     @map("status_code")
+  // Wall-clock time in milliseconds from request start to response sent.
+  executionTime Int      @map("execution_time")
+  // Timestamp of the request.
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("tbl_api_request_response")
+  @@index([userId])
+  @@index([api])
+  @@index([statusCode])
+  @@index([createdAt])
+}
+
 model Application {
   id        String            @id @default(cuid())
   userId    String

@@ -4,6 +4,7 @@ import path from "node:path";
 import { readResumeFile } from "@/lib/storage/resume-storage";
 import { getDbUserByClerkId } from "@/services/users/ensure-user";
 import { getResumeForUser } from "@/services/resumes/resume.service";
+import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,7 @@ function contentTypeFromFileName(fileName: string): string {
   return "application/octet-stream";
 }
 
-export async function GET(_request: Request, context: RouteContext) {
+async function handler(_request: Request, context: RouteContext) {
   try {
     const { userId: clerkUserId } = await auth();
 
@@ -54,3 +55,5 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response("Not found", { status: 404 });
   }
 }
+
+export const GET = withApiLogger(handler);

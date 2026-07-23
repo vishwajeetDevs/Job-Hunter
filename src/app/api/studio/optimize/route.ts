@@ -24,6 +24,7 @@ import {
   saveOptimizedResume,
 } from "@/services/studio/studio.service";
 import { ensureDbUser } from "@/services/users/ensure-user";
+import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
 // Allow up to 60 s so a single AI generation can complete on Hobby/Pro plans.
@@ -47,7 +48,7 @@ function reinforceAlreadyMatchedSkills(
   };
 }
 
-export async function POST(request: Request) {
+async function handler(request: Request) {
   try {
     const { userId: clerkUserId } = await auth();
 
@@ -215,3 +216,5 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export const POST = withApiLogger(handler);
