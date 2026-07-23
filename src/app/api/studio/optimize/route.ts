@@ -5,9 +5,11 @@ import { optimizedContentToText } from "@/features/studio/serialize";
 import {
   normalizeMatchReport,
   normalizeOptimizedResumeContent,
+  type MatchReport,
+  type OptimizedResumeContent,
 } from "@/features/studio/types";
 import { normalizeParsedResumeData } from "@/features/resume/types";
-import { topJobKeywordStrings } from "@/services/match/engine";
+import { sanitizeKeywords, topJobKeywordStrings } from "@/services/match/engine";
 import { buildMatchReport } from "@/services/studio/analyze.service";
 import {
   generateOptimizedResume,
@@ -23,6 +25,27 @@ import {
 import { ensureDbUser } from "@/services/users/ensure-user";
 
 export const runtime = "nodejs";
+
+function reinforceAlreadyMatchedSkills(
+  content: OptimizedResumeContent,
+  report: MatchReport
+): OptimizedResumeContent {
+  const skills = sanitizeKeywords([...report.matchedSkills, ...content.skills]);
+  if (skills.join("\0") === content.skills.join("\0")) return content;
+
+  return {
+    ...content,
+    skills,
+    changes: [
+      ...content.changes,
+      "Preserved already-matched job keywords so the optimized resume does not regress.",
+    ].slice(0, 15),
+  };
+}
+
+function isImproved(original: MatchReport, optimized: MatchReport): boolean {
+  return optimized.matchScore > original.matchScore;
+}
 
 export async function POST(request: Request) {
   try {
@@ -71,6 +94,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const jobTitle = job.title;
+    const jobCompany = job.company;
+    const jobDescription = job.description.trim();
+    const jobExperienceLevel = job.experienceLevel;
+
     const resumeText = await ensureResumeRawText(master);
     // The report is untrusted client input — re-validate it before persisting.
     const clientReport = body?.report
@@ -82,38 +110,66 @@ export async function POST(request: Request) {
     const report = buildMatchReport({
       resumeText,
       parsedData: normalizeParsedResumeData(master.parsedData),
-      jobTitle: job.title,
-      jobCompany: job.company,
-      jobDescription: job.description,
-      jobExperienceLevel: job.experienceLevel,
+      jobTitle,
+      jobCompany,
+      jobDescription,
+      jobExperienceLevel,
     });
 
     const previousVersion =
       normalizeOptimizedResumeContent(existing?.content, 0)?.meta.version ?? 0;
 
-    const content = await generateOptimizedResume({
-      resumeText,
-      jobTitle: job.title,
-      jobCompany: job.company,
-      jobDescription: job.description,
-      report: clientReport ?? report,
-      // Steer the rewrite with the exact de-noised keywords the engine
-      // scores, so truthful alignment translates into a higher score.
-      targetKeywords: topJobKeywordStrings(job),
-      version: previousVersion + 1,
-    });
+    const baseTargetKeywords = topJobKeywordStrings(job);
 
-    // Re-score the generated resume with the SAME engine so before/after
-    // are directly comparable — improvement reflects real content changes.
-    const optimizedReport = buildMatchReport({
-      resumeText: optimizedContentToText(content),
-      parsedData: null,
-      extraKeywords: content.skills,
-      jobTitle: job.title,
-      jobCompany: job.company,
-      jobDescription: job.description,
-      jobExperienceLevel: job.experienceLevel,
-    });
+    async function generateCandidate(extraTargets: string[] = []) {
+      const generated = await generateOptimizedResume({
+        resumeText,
+        jobTitle,
+        jobCompany,
+        jobDescription,
+        report: clientReport ?? report,
+        // Steer the rewrite with the exact de-noised keywords the engine
+        // scores, so truthful alignment translates into a higher score.
+        targetKeywords: sanitizeKeywords([
+          ...baseTargetKeywords,
+          ...extraTargets,
+        ]).slice(0, 24),
+        version: previousVersion + 1,
+      });
+
+      const content = reinforceAlreadyMatchedSkills(generated, report);
+      const optimizedReport = buildMatchReport({
+        resumeText: optimizedContentToText(content),
+        parsedData: null,
+        extraKeywords: content.skills,
+        jobTitle,
+        jobCompany,
+        jobDescription,
+        jobExperienceLevel,
+      });
+
+      return { content, optimizedReport };
+    }
+
+    let candidate = await generateCandidate();
+
+    if (!isImproved(report, candidate.optimizedReport)) {
+      // One focused retry: retain current matches and explicitly aim at gaps.
+      const retry = await generateCandidate([
+        ...report.matchedSkills,
+        ...report.missingKeywords,
+      ]);
+
+      if (retry.optimizedReport.matchScore > candidate.optimizedReport.matchScore) {
+        candidate = retry;
+      }
+    }
+
+    if (!isImproved(report, candidate.optimizedReport)) {
+      throw new OptimizeError(
+        `The AI could not safely improve this resume above the current ${report.matchScore}% match score without risking unsupported claims. No worse version was saved.`
+      );
+    }
 
     const saved = await saveOptimizedResume({
       userId: user.id,
@@ -121,16 +177,16 @@ export async function POST(request: Request) {
       jobId: job.id,
       jobTitle: job.title,
       jobCompany: job.company,
-      content,
-      analysis: { original: report, optimized: optimizedReport },
+      content: candidate.content,
+      analysis: { original: report, optimized: candidate.optimizedReport },
     });
 
     return NextResponse.json({
       success: true,
       resumeId: saved.id,
       parentResumeId: master.id,
-      content,
-      optimizedReport,
+      content: candidate.content,
+      optimizedReport: candidate.optimizedReport,
     });
   } catch (error) {
     if (error instanceof OptimizeError) {

@@ -54,6 +54,10 @@ export async function generateOptimizedResume(input: {
       jobTitle: input.jobTitle,
       jobCompany: input.jobCompany,
       jobDescription: input.jobDescription,
+      originalMatchScore: input.report?.matchScore,
+      originalAtsScore: input.report?.atsScore,
+      matchedKeywords: input.report?.matchedSkills,
+      missingKeywords: input.report?.missingKeywords,
       // Prefer the deterministic JD keyword targets; fall back to the
       // analysis report's missing keywords when none were supplied.
       targetKeywords:
@@ -61,7 +65,7 @@ export async function generateOptimizedResume(input: {
           ? input.targetKeywords
           : input.report?.missingKeywords,
     }),
-    maxTokens: 2200,
+    maxTokens: 3200,
     // Slight creativity produces better rewrites than pure greedy decoding.
     temperature: 0.3,
   });

@@ -49,6 +49,10 @@ export function buildOptimizeUserPrompt(input: {
   jobTitle: string;
   jobCompany: string;
   jobDescription: string;
+  originalMatchScore?: number;
+  originalAtsScore?: number;
+  matchedKeywords?: string[];
+  missingKeywords?: string[];
   /**
    * Highest-priority, de-noised keywords from the posting (skills first).
    * Hints to surface where truthfully supported — never fabrication targets.
@@ -65,6 +69,34 @@ export function buildOptimizeUserPrompt(input: {
       "",
       "TARGET KEYWORDS (cover each one wherever the resume truthfully supports it; never fabricate):",
       input.targetKeywords.slice(0, 18).join(", ")
+    );
+  }
+
+  if (typeof input.originalMatchScore === "number") {
+    lines.push(
+      "",
+      `CURRENT SCORE: overall ${input.originalMatchScore}/100${
+        typeof input.originalAtsScore === "number"
+          ? `, ATS ${input.originalAtsScore}/100`
+          : ""
+      }.`,
+      "QUALITY BAR: the optimized resume must re-score higher than the current overall score. Preserve every already-matched requirement, then truthfully close gaps using only evidence from the original resume."
+    );
+  }
+
+  if (input.matchedKeywords && input.matchedKeywords.length > 0) {
+    lines.push(
+      "",
+      "ALREADY MATCHED REQUIREMENTS TO PRESERVE:",
+      input.matchedKeywords.slice(0, 12).join(", ")
+    );
+  }
+
+  if (input.missingKeywords && input.missingKeywords.length > 0) {
+    lines.push(
+      "",
+      "GAPS TO CLOSE ONLY IF TRUTHFULLY SUPPORTED BY THE ORIGINAL RESUME:",
+      input.missingKeywords.slice(0, 12).join(", ")
     );
   }
 
