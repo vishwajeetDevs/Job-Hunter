@@ -35,9 +35,9 @@ function formatLastRefresh(iso: string): string {
 }
 
 /**
- * Live countdown to the next scheduled job sync (Vercel cron).
- * Replaces the manual "Refresh jobs" button — syncing is fully
- * server-side and doesn't depend on anyone keeping the site open.
+ * Live countdown to the next scheduled Careerjet sync (Vercel cron).
+ * Careerjet is the only source refreshed automatically — all other job
+ * boards are fetched via the manual "Refresh Jobs" button.
  *
  * When the countdown crosses zero it refreshes the route so the page
  * picks up the newly ingested jobs and the next schedule.
@@ -75,14 +75,14 @@ export function NextRefreshCountdown({
     <div className="flex flex-col items-start gap-0.5 sm:items-end">
       <span
         className="inline-flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-3 py-1.5 text-sm font-medium"
-        title="Jobs are synced automatically on the server — no action needed."
+        title="Careerjet jobs sync automatically on the server — use Refresh Jobs to fetch all other boards."
       >
         <Clock className="size-4 text-primary" />
         {remainingMs === null ? (
-          <span className="text-muted-foreground">Next job refresh: —</span>
+          <span className="text-muted-foreground">Next Careerjet sync: —</span>
         ) : remainingMs > 0 ? (
           <>
-            Next job refresh in:{" "}
+            Next Careerjet sync in:{" "}
             <span className="tabular-nums text-primary">
               {formatRemaining(remainingMs)}
             </span>
@@ -90,14 +90,14 @@ export function NextRefreshCountdown({
         ) : (
           <span className="inline-flex items-center gap-1.5 text-muted-foreground">
             <RefreshCw className="size-3.5 animate-spin" />
-            Refreshing jobs…
+            Syncing Careerjet jobs…
           </span>
         )}
       </span>
       <span className="text-xs text-muted-foreground">
         {lastRefreshAt
           ? `Last synced ${formatLastRefresh(lastRefreshAt)}`
-          : "Auto-synced from all job boards"}
+          : "Careerjet auto-syncs; other boards via Refresh Jobs"}
       </span>
     </div>
   );

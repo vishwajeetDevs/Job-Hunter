@@ -11,6 +11,11 @@ import type { JobIngestionTarget } from "@/services/jobs/job-aggregation.service
  *
  * A target that 404s or fails is skipped without affecting the others.
  *
+ * Refresh split:
+ * - CRON_TARGETS      → Careerjet only, fetched automatically on schedule.
+ * - MANUAL_REFRESH_TARGETS → every other source, fetched only when a user
+ *   clicks the "Refresh Jobs" button on the jobs page.
+ *
  * TODO(v2): replace with a user-configurable tracked-companies table.
  */
 export const TRACKED_COMPANIES: JobIngestionTarget[] = [
@@ -134,3 +139,18 @@ export const TRACKED_COMPANIES: JobIngestionTarget[] = [
     location: "Mumbai, India",
   },
 ];
+
+/**
+ * Targets fetched automatically by the scheduled cron
+ * (`/api/cron/refresh-jobs`) — Careerjet only.
+ */
+export const CRON_TARGETS: JobIngestionTarget[] = TRACKED_COMPANIES.filter(
+  (target) => target.source === "careerjet"
+);
+
+/**
+ * Targets fetched only via the manual "Refresh Jobs" button
+ * (`POST /api/jobs/refresh`) — every source except Careerjet.
+ */
+export const MANUAL_REFRESH_TARGETS: JobIngestionTarget[] =
+  TRACKED_COMPANIES.filter((target) => target.source !== "careerjet");

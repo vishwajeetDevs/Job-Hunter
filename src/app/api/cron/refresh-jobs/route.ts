@@ -2,20 +2,25 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { runJobsRefresh } from "@/services/jobs/refresh.service";
+import { CRON_TARGETS } from "@/services/jobs/tracked-companies";
 import { withApiLogger } from "@/lib/api-logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Full refresh hits ~35 external targets + enrichment + cleanup; give it
-// room beyond the default 10s (Hobby allows up to 300s with Fluid).
+// Careerjet fetch + enrichment + cleanup; give it room beyond the
+// default 10s (Hobby allows up to 300s with Fluid).
 export const maxDuration = 300;
 
 /**
  * GET /api/cron/refresh-jobs
  *
- * Scheduled entry point (see vercel.json "crons"). Vercel invokes this
- * with `Authorization: Bearer ${CRON_SECRET}` — requests without the
- * secret are rejected, so the endpoint can't be triggered publicly.
+ * Scheduled entry point (see vercel.json "crons") — fetches CAREERJET
+ * jobs only. All other sources are fetched via the manual "Refresh Jobs"
+ * button (POST /api/jobs/refresh).
+ *
+ * Vercel invokes this with `Authorization: Bearer ${CRON_SECRET}` —
+ * requests without the secret are rejected, so the endpoint can't be
+ * triggered publicly.
  *
  * Local/manual trigger:
  *   curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/refresh-jobs
@@ -36,7 +41,7 @@ async function handler(request: Request) {
   }
 
   try {
-    const summary = await runJobsRefresh("cron");
+    const summary = await runJobsRefresh("cron", CRON_TARGETS);
 
     // Jobs pages are server-rendered from the DB — bust their cache so
     // the next visit shows the fresh listings and reset countdown.

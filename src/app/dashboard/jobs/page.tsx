@@ -5,6 +5,7 @@ import { JobsFilterPersistence } from "@/components/jobs/jobs-filter-persistence
 import { JobsInfiniteList } from "@/components/jobs/jobs-infinite-list";
 import { JobsToolbar } from "@/components/jobs/jobs-toolbar";
 import { NextRefreshCountdown } from "@/components/jobs/next-refresh-countdown";
+import { RefreshJobsButton } from "@/components/jobs/refresh-jobs-button";
 import {
   RelevantJobsExplorer,
   type ResumeMatchOption,
@@ -120,10 +121,13 @@ export default async function JobsPage({ searchParams }: JobsPageProps) {
             .
           </p>
         </div>
-        <NextRefreshCountdown
-          lastRefreshAt={refreshStatus.lastRefreshAt}
-          nextRefreshAt={refreshStatus.nextRefreshAt}
-        />
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <RefreshJobsButton />
+          <NextRefreshCountdown
+            lastRefreshAt={refreshStatus.lastRefreshAt}
+            nextRefreshAt={refreshStatus.nextRefreshAt}
+          />
+        </div>
       </div>
 
       <ViewTabs active="all" />
@@ -187,10 +191,13 @@ async function RelevantJobsView({
             Personalized recommendations based on your resume.
           </p>
         </div>
-        <NextRefreshCountdown
-          lastRefreshAt={refreshStatus.lastRefreshAt}
-          nextRefreshAt={refreshStatus.nextRefreshAt}
-        />
+        <div className="flex flex-col items-start gap-2 sm:items-end">
+          <RefreshJobsButton />
+          <NextRefreshCountdown
+            lastRefreshAt={refreshStatus.lastRefreshAt}
+            nextRefreshAt={refreshStatus.nextRefreshAt}
+          />
+        </div>
       </div>
 
       <ViewTabs active="relevant" />

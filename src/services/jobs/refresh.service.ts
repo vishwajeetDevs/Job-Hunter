@@ -1,14 +1,20 @@
 import { prisma } from "@/lib/prisma";
-import { ingestJobsFromTargets } from "@/services/jobs/job-aggregation.service";
+import {
+  ingestJobsFromTargets,
+  type JobIngestionTarget,
+} from "@/services/jobs/job-aggregation.service";
 import { enrichMissingJobs } from "@/services/jobs/job.service";
 import { TRACKED_COMPANIES } from "@/services/jobs/tracked-companies";
 
 /**
- * Scheduled job refresh — the single server-side pipeline behind the
- * Vercel cron (`/api/cron/refresh-jobs`, schedule in vercel.json).
+ * Job refresh pipeline, shared by two entry points:
+ * - Vercel cron (`/api/cron/refresh-jobs`) → Careerjet targets only.
+ * - Manual "Refresh Jobs" button (`POST /api/jobs/refresh`) → all other
+ *   sources.
  *
- * Flow: fetch all sources → normalize & dedupe (unique [source,externalId])
- * → enrich → delete expired jobs → record the run in ingestion_runs.
+ * Flow: fetch the given targets → normalize & dedupe (unique
+ * [source,externalId]) → enrich → delete expired jobs → record the run
+ * in tbl_cron_execution_logs.
  * Sources run independently; one failing source never blocks the others.
  */
 
@@ -113,8 +119,26 @@ export async function cleanupExpiredJobs(): Promise<number> {
 }
 
 /**
- * Runs one full refresh cycle. Server-side only — invoked by the cron
- * route, never from the browser.
+ * True when a refresh run is currently in progress (a RUNNING log row
+ * started within the last 10 minutes). Used by the manual-refresh API to
+ * reject overlapping runs; older RUNNING rows are treated as crashed and
+ * don't block.
+ */
+export async function isRefreshRunning(): Promise<boolean> {
+  const cutoffIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT id
+    FROM tbl_cron_execution_logs
+    WHERE status::text = 'RUNNING'
+      AND log->>'startedAt' > ${cutoffIso}
+    LIMIT 1`;
+  return rows.length > 0;
+}
+
+/**
+ * Runs one refresh cycle over the given ingestion targets. Server-side
+ * only — invoked by the cron route (Careerjet targets) or the manual
+ * refresh API (all other sources), never from the browser directly.
  *
  * Every execution writes one CronExecutionLog row: claimed as RUNNING
  * at start, then finalized with per-source counts, a JSON source-wise
@@ -122,7 +146,8 @@ export async function cleanupExpiredJobs(): Promise<number> {
  * Logging failures never abort the refresh itself.
  */
 export async function runJobsRefresh(
-  triggeredBy: string
+  triggeredBy: string,
+  targets: JobIngestionTarget[] = TRACKED_COMPANIES
 ): Promise<RefreshRunSummary> {
   const startedAt = Date.now();
   const startedAtIso = new Date(startedAt).toISOString();
@@ -135,7 +160,7 @@ export async function runJobsRefresh(
         startedAt: startedAtIso,
         triggeredBy,
         sources: {},
-        data: { totalSources: TRACKED_COMPANIES.length },
+        data: { totalSources: targets.length },
       },
     },
     select: { id: true },
@@ -145,7 +170,7 @@ export async function runJobsRefresh(
     // Every source runs independently — failures are collected per source
     // and never abort the batch (see ingestJobsFromSource).
     // Careerjet reads CAREERJET_USER_IP inside its adapter (whitelisted IP).
-    const results = await ingestJobsFromTargets(TRACKED_COMPANIES);
+    const results = await ingestJobsFromTargets(targets);
 
     const summary = results.reduce(
       (acc, result) => ({
@@ -254,7 +279,7 @@ export async function runJobsRefresh(
             triggeredBy,
             sources: {},
             data: {
-              totalSources: TRACKED_COMPANIES.length,
+              totalSources: targets.length,
               errors: [error instanceof Error ? error.message : String(error)],
             },
           },
