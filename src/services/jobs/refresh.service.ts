@@ -20,12 +20,12 @@ import { TRACKED_COMPANIES } from "@/services/jobs/tracked-companies";
 
 /**
  * How often the cron fires. MUST match vercel.json's schedule:
- * - 2  (every 2 hours, Pro plan): "0 *\/2 * * *"
- *   = 5:30, 7:30, 9:30, 11:30 AM/PM IST (every even UTC hour)
+ * - 24 (once daily, Vercel Hobby-compatible): "0 0 * * *"
+ *   = 00:00 UTC / 5:30 AM IST
  * Override with JOBS_REFRESH_INTERVAL_HOURS when changing vercel.json.
  */
 export const REFRESH_INTERVAL_HOURS = Number(
-  process.env.JOBS_REFRESH_INTERVAL_HOURS ?? 2
+  process.env.JOBS_REFRESH_INTERVAL_HOURS ?? 24
 );
 
 /** UTC time of the first anchor run — "0 0" = 00:00 UTC = 5:30 AM IST. */
